@@ -84,11 +84,11 @@ export const tourSteps: Step[] = [
   // ── Procurement ──
   {
     target: '[data-tour="procurement-title"]',
-    title: 'Making the budget stretch',
+    title: 'From forecast to action',
     content:
-      'Budgets never cover everything. The system takes the demand predictions, applies safety margins, ' +
-      'and figures out the best way to spend the quarterly budget — making sure life-saving drugs ' +
-      'are funded first.',
+      'The map shows all 10 facilities — green means covered, red means medicines are running out. ' +
+      'Dashed lines show where the AI recommends moving surplus stock between facilities ' +
+      'instead of ordering more.',
     placement: 'bottom',
     disableBeacon: true,
   },
@@ -96,19 +96,18 @@ export const tourSteps: Step[] = [
     target: '[data-tour="procurement-metrics"]',
     title: 'What\'s covered and what\'s not',
     content:
-      'How much of the budget is allocated, how many drugs are fully covered, ' +
-      'and which ones are still at risk. This is the conversation a district health officer ' +
-      'needs to have with their regional supply chain.',
+      'Critical drug coverage, stockout risks, and budget allocation at a glance. ' +
+      'Click any facility on the map to see its specific recommendations.',
     placement: 'bottom',
     disableBeacon: true,
   },
   {
     target: '[data-tour="procurement-tabs"]',
-    title: 'Transparent decision-making',
+    title: 'Four ways to look at the same plan',
     content:
-      'The AI Decisions tab shows exactly how the system allocated the budget — ' +
-      'which drugs it prioritized, what tradeoffs it made, and why. ' +
-      'Every recommendation can be reviewed and challenged.',
+      'Overview shows the map. Action Plan lists what each facility should do. ' +
+      'Impact shows what happens if recommendations are followed. ' +
+      'Evidence shows exactly how the AI made its decisions.',
     placement: 'top',
     disableBeacon: true,
   },

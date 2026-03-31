@@ -118,7 +118,7 @@ export default function Dashboard() {
               to="/procurement"
               className="ml-auto flex-shrink-0 btn-primary text-xs no-underline"
             >
-              Review Orders
+              Review Recommendations
             </Link>
           </div>
         </div>
@@ -127,7 +127,7 @@ export default function Dashboard() {
       {/* ── Stage Cards ───────────────────────────────────────────────────── */}
       <div data-tour="stage-cards" className="mb-8">
         <div className="section-header">How It Works</div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-stretch">
 
           {/* Card 1: Collect & Verify */}
           <Link to="/inputs" className="card-accent accent-green no-underline block p-5">

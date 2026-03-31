@@ -12,7 +12,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: Home, tourId: 'nav-home' },
   { to: '/inputs', label: 'Data', icon: FileText, tourId: 'nav-inputs' },
   { to: '/demand', label: 'Forecast', icon: TrendingUp, tourId: 'nav-demand' },
-  { to: '/procurement', label: 'Orders', icon: ShoppingCart, tourId: 'nav-procurement' },
+  { to: '/procurement', label: 'Recommendations', icon: ShoppingCart, tourId: 'nav-procurement' },
   { to: '/pipeline', label: 'How It Works', icon: Settings, tourId: 'nav-pipeline' },
 ]
 
