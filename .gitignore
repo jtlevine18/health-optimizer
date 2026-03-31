@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+__pycache__/
+*.pyc
+*.pyo
+.vite/
+*.egg-info/
+.DS_Store
+models/*.joblib
+.ruff_cache/
+.pytest_cache/
+scheduler_state.json

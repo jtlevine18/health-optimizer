@@ -1,0 +1,33 @@
+interface Props {
+  status: string
+  className?: string
+}
+
+const STATUS_MAP: Record<string, { className: string; label?: string }> = {
+  critical: { className: 'badge-red' },
+  high: { className: 'badge-dark-orange' },
+  moderate: { className: 'badge-orange' },
+  low: { className: 'badge-green' },
+  none: { className: 'badge-slate' },
+  good: { className: 'badge-green' },
+  poor: { className: 'badge-red' },
+  ok: { className: 'badge-green' },
+  success: { className: 'badge-green' },
+  failed: { className: 'badge-red' },
+  running: { className: 'badge-blue' },
+  pending: { className: 'badge-slate' },
+  hospital: { className: 'badge-blue' },
+  health_center: { className: 'badge-amber', label: 'health center' },
+  health_post: { className: 'badge-slate', label: 'health post' },
+}
+
+export default function StatusBadge({ status, className = '' }: Props) {
+  const config = STATUS_MAP[status] ?? { className: 'badge-slate' }
+  const label = config.label ?? status
+
+  return (
+    <span className={`${config.className} ${className}`}>
+      {label}
+    </span>
+  )
+}

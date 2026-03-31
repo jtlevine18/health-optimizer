@@ -1,0 +1,28 @@
+name: Weekly Pipeline Run
+
+on:
+  schedule:
+    - cron: "30 0 * * 1"  # Monday 00:30 UTC
+  workflow_dispatch:       # Manual trigger
+
+jobs:
+  trigger-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger pipeline run
+        run: |
+          echo "Triggering pipeline at HF Space..."
+          RESPONSE=$(curl -s -X POST \
+            "https://jtlevine-health-supply-optimizer.hf.space/api/pipeline/trigger" \
+            -H "Content-Type: application/json")
+          echo "Response: $RESPONSE"
+
+      - name: Wait for completion
+        run: |
+          echo "Waiting 180s for pipeline to complete..."
+          sleep 180
+
+      - name: Check health
+        run: |
+          STATUS=$(curl -s "https://jtlevine-health-supply-optimizer.hf.space/health")
+          echo "Health: $STATUS"
