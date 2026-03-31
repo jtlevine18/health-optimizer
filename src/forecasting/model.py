@@ -55,6 +55,14 @@ FEATURE_COLS = [
     "drug_category_encoded",
     "month",
     "is_rainy_season",
+    # Expanded features (supply chain + facility context)
+    "consumption_lag_2m",
+    "cross_facility_demand_ratio",
+    "reporting_quality_encoded",
+    "drug_criticality",
+    "days_of_stock_current",
+    "stock_velocity",
+    "lead_time_days",
 ]
 
 # Facility type encoding
@@ -80,6 +88,12 @@ DISEASE_CATEGORY_MAP = {
     "Diarrhoeal": "diarrhoea",
     "Antibiotics": "respiratory",
 }
+
+# Reporting quality encoding
+REPORTING_QUALITY_ENC = {"good": 0, "moderate": 1, "poor": 2}
+
+# Supply source to lead time mapping
+LEAD_TIME_MAP = {"central_warehouse": 7, "regional_depot": 14, "international": 45}
 
 
 def _generate_climate_for_month(
@@ -242,6 +256,25 @@ class XGBoostDemandModel:
                     prev_mult = drug["seasonal_multiplier"].get(prev_season, 1.0)
                     consumption_last_month = baseline * prev_mult
 
+                    # 2-month lag consumption
+                    prev2_month = ((month_num - 3) % 12) + 1
+                    prev2_season = _get_season(
+                        date(2026, prev2_month, 15), fac.latitude,
+                    )
+                    prev2_mult = drug["seasonal_multiplier"].get(prev2_season, 1.0)
+                    consumption_lag_2m = baseline * prev2_mult
+
+                    # Stock velocity: daily consumption rate
+                    stock_velocity = monthly_consumption / 30 if monthly_consumption > 0 else 0
+
+                    # Days of stock: estimate from latest readings
+                    latest = [r for r in stock_readings if r.drug_id == did and r.reported]
+                    if latest and stock_velocity > 0:
+                        last_stock = latest[-1].stock_level
+                        days_of_stock = last_stock / stock_velocity if last_stock else 0
+                    else:
+                        days_of_stock = 30  # default 1 month
+
                     row = {
                         **disease,
                         "consumption_last_month": round(consumption_last_month, 1),
@@ -256,6 +289,16 @@ class XGBoostDemandModel:
                         ),
                         "month": month_num,
                         "is_rainy_season": 1 if season == "rainy" else 0,
+                        # Expanded features
+                        "consumption_lag_2m": round(consumption_lag_2m, 1),
+                        "cross_facility_demand_ratio": 1.0,  # computed post-hoc
+                        "reporting_quality_encoded": REPORTING_QUALITY_ENC.get(
+                            fac.reporting_quality, 1,
+                        ),
+                        "drug_criticality": 1 if drug.get("critical", False) else 0,
+                        "days_of_stock_current": round(min(days_of_stock, 180), 1),
+                        "stock_velocity": round(stock_velocity, 2),
+                        "lead_time_days": LEAD_TIME_MAP.get("regional_depot", 14),
                         # Target
                         "consumption_rate_per_1000": round(target, 2),
                         # Metadata (not features)
@@ -266,9 +309,19 @@ class XGBoostDemandModel:
                     rows.append(row)
 
         df = pd.DataFrame(rows)
+
+        # Compute cross-facility demand ratio post-hoc
+        if not df.empty and "consumption_rate_per_1000" in df.columns:
+            cat_mean = df.groupby("drug_category_encoded")[
+                "consumption_rate_per_1000"
+            ].transform("mean")
+            df["cross_facility_demand_ratio"] = (
+                df["consumption_rate_per_1000"] / cat_mean.clip(lower=1)
+            ).round(3)
+
         log.info(
-            "Built training data: %d rows (%d facilities x %d drugs x %d months)",
-            len(df), len(facilities), len(drugs), months_back,
+            "Built training data: %d rows (%d facilities x %d drugs x %d months), %d features",
+            len(df), len(facilities), len(drugs), months_back, len(FEATURE_COLS),
         )
         return df
 

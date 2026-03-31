@@ -814,9 +814,40 @@ def get_reconciled_data(
 
 @app.get("/api/model-info")
 def get_model_info():
-    """XGBoost / forecasting model metrics and feature importances."""
+    """ML stack: XGBoost demand model, residual correction, anomaly detection, RAG."""
+    model_metrics = _get("model_metrics", default={})
+
+    # Add info about all ML components
+    ml_stack = {
+        "primary_model": {
+            "type": "XGBoost Regressor (200 estimators, quantile regression)",
+            "features": 20,
+            "training_samples": model_metrics.get("primary_model", {}).get("train_samples"),
+            "metrics": model_metrics.get("primary_model", {}),
+        },
+        "residual_correction": {
+            "type": "XGBoost MOS-style residual correction (150 estimators)",
+            "purpose": "Corrects systematic biases in primary model predictions",
+            "metrics": model_metrics.get("residual_model", {}),
+        },
+        "anomaly_detection": {
+            "type": "Isolation Forest (200 estimators)",
+            "purpose": "Flags anomalous consumption patterns for investigation",
+        },
+        "rag": {
+            "type": "Hybrid FAISS + BM25 with sentence-transformers (all-MiniLM-L6-v2)",
+            "purpose": "Retrieval-augmented generation for clinical knowledge",
+        },
+        "agents": {
+            "extraction": "Claude tool-use agent (5 tools) with regex fallback",
+            "reconciliation": "Claude cross-validation agent (5 tools)",
+            "procurement": "Claude multi-facility optimization agent (5 tools)",
+        },
+    }
+
     return {
-        "model_metrics": _get("model_metrics", default={}),
+        "model_metrics": model_metrics,
+        "ml_stack": ml_stack,
         "source": _source(),
     }
 
@@ -844,6 +875,13 @@ def trigger_pipeline():
     """Trigger a manual pipeline run."""
     result = scheduler.trigger()
     return result
+
+
+@app.get("/api/db/health")
+def db_health():
+    """Database connectivity check."""
+    from src.db import health_check
+    return health_check()
 
 
 # -- Legacy endpoints (kept for backward compatibility) --

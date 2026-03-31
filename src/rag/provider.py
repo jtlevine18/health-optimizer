@@ -1,9 +1,10 @@
 """
 Hybrid FAISS + BM25 RAG provider for health supply chain knowledge.
 
-Uses TF-IDF vectors indexed in FAISS (IndexFlatIP) for semantic similarity
-and rank_bm25 for keyword matching, merged via reciprocal rank fusion.
-Indices are lazily initialized on first retrieve() call.
+Uses sentence-transformers (all-MiniLM-L6-v2) for dense semantic embeddings
+indexed in FAISS (IndexFlatIP) and rank_bm25 for keyword matching, merged
+via reciprocal rank fusion. Indices are lazily initialized on first
+retrieve() call.
 """
 
 from __future__ import annotations
@@ -14,26 +15,29 @@ from typing import Any
 import faiss
 import numpy as np
 from rank_bm25 import BM25Okapi
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sentence_transformers import SentenceTransformer
 
 from src.rag.knowledge_base import KNOWLEDGE_BASE, KnowledgeChunk
 
 log = logging.getLogger(__name__)
 
+# Sentence-transformers model: 384-dim, fast, good quality
+_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
 
 class RAGProvider:
     """Hybrid FAISS + BM25 retrieval-augmented generation provider.
 
-    Lazily builds indices on first retrieve() call. Returns deduplicated,
-    relevance-scored chunks via reciprocal rank fusion of both retrieval methods.
+    Dense retrieval via sentence-transformers (384-dim semantic embeddings)
+    combined with BM25 keyword matching. Results merged via reciprocal rank
+    fusion for robust retrieval across both semantic and lexical queries.
     """
 
     def __init__(self):
         self._chunks: list[KnowledgeChunk] = KNOWLEDGE_BASE
         self._bm25: BM25Okapi | None = None
         self._faiss_index: faiss.IndexFlatIP | None = None
-        self._tfidf: TfidfVectorizer | None = None
-        self._tfidf_matrix: np.ndarray | None = None
+        self._embedder: SentenceTransformer | None = None
         self._initialized = False
 
     def _initialize(self) -> None:
@@ -47,29 +51,20 @@ class RAGProvider:
         tokenized = [t.lower().split() for t in texts]
         self._bm25 = BM25Okapi(tokenized)
 
-        # TF-IDF + FAISS index
-        self._tfidf = TfidfVectorizer(
-            max_features=5000,
-            stop_words="english",
-            ngram_range=(1, 2),
-        )
-        tfidf_matrix = self._tfidf.fit_transform(texts).toarray().astype(np.float32)
+        # Sentence-transformer embeddings + FAISS index
+        self._embedder = SentenceTransformer(_EMBEDDING_MODEL)
+        embeddings = self._embedder.encode(
+            texts, normalize_embeddings=True, show_progress_bar=False,
+        ).astype(np.float32)
 
-        # Normalize for cosine similarity via inner product
-        norms = np.linalg.norm(tfidf_matrix, axis=1, keepdims=True)
-        norms[norms == 0] = 1  # avoid division by zero
-        tfidf_matrix = tfidf_matrix / norms
-        self._tfidf_matrix = tfidf_matrix
-
-        # Build FAISS inner-product index
-        dim = tfidf_matrix.shape[1]
+        dim = embeddings.shape[1]
         self._faiss_index = faiss.IndexFlatIP(dim)
-        self._faiss_index.add(tfidf_matrix)
+        self._faiss_index.add(embeddings)
 
         self._initialized = True
         log.info(
-            "RAG indices built: %d chunks, %d TF-IDF features, FAISS dim=%d",
-            len(self._chunks), tfidf_matrix.shape[1], dim,
+            "RAG indices built: %d chunks, embedding dim=%d (model=%s)",
+            len(self._chunks), dim, _EMBEDDING_MODEL,
         )
 
     @staticmethod
@@ -104,16 +99,14 @@ class RAGProvider:
         bm25_scores = self._bm25.get_scores(query.lower().split())
         bm25_ranking = np.argsort(bm25_scores)[::-1][:k_retrieve]
 
-        # FAISS retrieval
-        query_vec = self._tfidf.transform([query]).toarray().astype(np.float32)
-        query_norm = np.linalg.norm(query_vec)
-        if query_norm > 0:
-            query_vec = query_vec / query_norm
-        faiss_scores, faiss_indices = self._faiss_index.search(query_vec, k_retrieve)
+        # FAISS semantic retrieval
+        query_emb = self._embedder.encode(
+            [query], normalize_embeddings=True, show_progress_bar=False,
+        ).astype(np.float32)
+        faiss_scores, faiss_indices = self._faiss_index.search(query_emb, k_retrieve)
         faiss_ranking = faiss_indices[0]
 
         # Reciprocal Rank Fusion (RRF)
-        # RRF score = sum(1 / (k + rank)) across retrieval methods
         rrf_k = 60  # standard RRF constant
         rrf_scores: dict[int, float] = {}
 
@@ -128,7 +121,9 @@ class RAGProvider:
             rrf_scores[idx] = rrf_scores.get(idx, 0) + 1.0 / (rrf_k + rank + 1)
 
         # Sort by RRF score and take top_k
-        sorted_indices = sorted(rrf_scores.keys(), key=lambda i: rrf_scores[i], reverse=True)
+        sorted_indices = sorted(
+            rrf_scores.keys(), key=lambda i: rrf_scores[i], reverse=True,
+        )
         top_indices = sorted_indices[:top_k]
 
         # Normalize scores to 0-1 range
@@ -142,7 +137,6 @@ class RAGProvider:
         for idx in top_indices:
             chunk = self._chunks[idx]
             raw_score = rrf_scores[idx]
-            # Normalize: best result gets 1.0
             if max_score > min_score:
                 normalized = 0.5 + 0.5 * (raw_score - min_score) / (max_score - min_score)
             else:
@@ -174,3 +168,13 @@ class RAGProvider:
     @property
     def categories(self) -> list[str]:
         return sorted(set(c.category for c in self._chunks))
+
+    @property
+    def embedding_model(self) -> str:
+        return _EMBEDDING_MODEL
+
+    @property
+    def embedding_dim(self) -> int:
+        if self._faiss_index is not None:
+            return self._faiss_index.d
+        return 384  # default for all-MiniLM-L6-v2

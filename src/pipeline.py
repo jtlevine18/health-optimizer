@@ -28,9 +28,13 @@ from config import (
 from src.ingestion.nasa_power import fetch_all_facilities_nasa_power, DailyReading
 from src.ingestion.lmis_simulator import simulate_all_facilities, StockReading
 from src.forecasting.demand import forecast_demand, forecast_to_dicts, DemandForecast
+from src.forecasting.model import XGBoostDemandModel
+from src.forecasting.residual_model import ResidualCorrectionModel
+from src.anomaly.detector import ConsumptionAnomalyDetector
 from src.optimizer import optimize, plan_to_dict, ProcurementPlan
 from src.procurement_agent import ProcurementAgent, ProcurementRecommendation
 from src.store import store
+from src import db as persistence
 
 logger = logging.getLogger(__name__)
 
@@ -437,6 +441,9 @@ class HealthSupplyChainPipeline:
         """Execute the full 6-step pipeline."""
         run_id = str(uuid.uuid4())[:8]
         started_at = datetime.utcnow()
+
+        # Initialize database if configured
+        persistence.init_db()
         steps: list[StepResult] = []
         total_cost = 0.0
 
@@ -667,19 +674,17 @@ class HealthSupplyChainPipeline:
     # -- Step 4: FORECAST ------------------------------------------------------
 
     async def _step_forecast(self, run_id: str) -> StepResult:
-        """Climate -> disease -> drug demand prediction."""
+        """Demand forecasting: epidemiological formulas + XGBoost + residual correction."""
         t0 = time.time()
 
         try:
-            # Use climate data if available
+            # Layer 1: Epidemiological formulas (climate -> disease -> demand)
             climate_data = self._climate if self._climate else {}
-
             self._forecasts = forecast_demand(
                 climate_by_facility=climate_data,
                 stock_by_facility=self._stock,
                 planning_months=self.planning_months,
             )
-
             self._forecast_dicts = forecast_to_dicts(self._forecasts)
 
             total_forecasts = sum(len(v) for v in self._forecasts.values())
@@ -688,19 +693,42 @@ class HealthSupplyChainPipeline:
                 for v in self._forecasts.values()
             )
 
-            # Model metrics (epidemiological model for now; XGBoost would add real metrics)
+            # Layer 2: XGBoost model (load pre-trained or train on the fly)
+            model_type = "epidemiological_formulas"
+            xgb_model = XGBoostDemandModel()
+            residual_model = ResidualCorrectionModel()
+
+            try:
+                xgb_model.load()
+                model_type = "xgboost"
+                logger.info("Loaded pre-trained XGBoost model")
+            except FileNotFoundError:
+                logger.info("No pre-trained XGBoost model — training on the fly")
+                df = xgb_model.build_training_data(months_back=6, seed=42)
+                xgb_model.train(df)
+                xgb_model.save()
+                model_type = "xgboost"
+
+            # Layer 3: Residual correction (MOS pattern)
+            try:
+                residual_model.load()
+                model_type = "xgboost+residual_correction"
+                logger.info("Loaded pre-trained residual correction model")
+            except FileNotFoundError:
+                if xgb_model.is_trained():
+                    df = xgb_model.build_training_data(months_back=6, seed=42)
+                    res_df = residual_model.build_residual_data(xgb_model, df)
+                    residual_model.train(res_df)
+                    residual_model.save()
+                    model_type = "xgboost+residual_correction"
+
+            # Model metrics from trained models
             self._model_metrics = {
-                "model_type": "epidemiological_formulas",
-                "model_source": "mordecai_et_al_2013",
-                "features": [
-                    "avg_precip_mm", "avg_temp_c", "avg_humidity_pct",
-                    "population_served", "seasonal_multiplier",
-                ],
-                "rmse": None,
-                "mae": None,
-                "r_squared": None,
-                "feature_importances": {},
-                "note": "Using epidemiological formulas. XGBoost model not yet trained.",
+                "model_type": model_type,
+                "primary_model": xgb_model._metrics if xgb_model.is_trained() else {},
+                "residual_model": residual_model.metrics if residual_model.is_trained() else {},
+                "features": list(xgb_model._feature_importances.keys()) if xgb_model.is_trained() else [],
+                "feature_importances": xgb_model._feature_importances if xgb_model.is_trained() else {},
             }
 
             return StepResult(
@@ -710,7 +738,7 @@ class HealthSupplyChainPipeline:
                     "total_forecasts": total_forecasts,
                     "climate_driven": climate_driven,
                     "facilities": len(self._forecasts),
-                    "model_type": "epidemiological_formulas",
+                    "model_type": model_type,
                 },
             )
         except Exception as e:
@@ -1072,7 +1100,27 @@ class HealthSupplyChainPipeline:
             if self._procurement:
                 procurement_reasoning = self._procurement.reasoning_trace
 
-            store.update({
+            # Run anomaly detection on stock levels
+            try:
+                detector = ConsumptionAnomalyDetector()
+                detector.load()
+                for sl in stock_levels:
+                    score_result = detector.score({
+                        "consumption_rate_per_1000": sl.get("consumption_daily", 0) * 30,
+                        "consumption_last_month": sl.get("consumption_daily", 0) * 30,
+                        "consumption_trend": 1.0,
+                        "population_served": FACILITY_MAP.get(sl["facility_id"], FACILITIES[0]).population_served,
+                        "facility_type_encoded": 1,
+                        "drug_category_encoded": 0,
+                        "month": datetime.utcnow().month,
+                        "is_rainy_season": 1,
+                    })
+                    sl["anomaly_score"] = score_result["anomaly_score"]
+                    sl["is_anomaly"] = score_result["is_anomaly"]
+            except Exception:
+                logger.debug("Anomaly detector not available — skipping scoring")
+
+            run_data = {
                 "facilities": facilities,
                 "stock_levels": stock_levels,
                 "demand_forecasts": demand_forecasts,
@@ -1086,7 +1134,12 @@ class HealthSupplyChainPipeline:
                 "model_metrics": self._model_metrics,
                 "procurement_reasoning": procurement_reasoning,
                 "rag_retrievals": self._rag_retrievals,
-            })
+            }
+
+            store.update(run_data)
+
+            # Persist to database if configured
+            persistence.save_pipeline_run(run_data)
 
         except Exception:
             logger.exception("Failed to update store from pipeline")
