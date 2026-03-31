@@ -11,3 +11,4 @@ models/*.joblib
 .ruff_cache/
 .pytest_cache/
 scheduler_state.json
+.vercel

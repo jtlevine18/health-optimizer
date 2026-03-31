@@ -31,3 +31,49 @@ export function ErrorState({ message = 'Failed to load data', onRetry }: ErrorPr
     </div>
   )
 }
+
+/* ── Skeleton loaders ── */
+
+export function DashboardSkeleton() {
+  return (
+    <div className="animate-fade-in space-y-8">
+      <div className="pt-2 pb-6">
+        <div className="skeleton-title mb-2" />
+        <div className="skeleton-text w-2/5" />
+      </div>
+      <div>
+        <div className="skeleton-text w-24 mb-4" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="skeleton-metric" />
+        <div className="skeleton-metric" />
+        <div className="skeleton-metric" />
+        <div className="skeleton-metric" />
+      </div>
+      <div className="skeleton-chart" style={{ height: 160 }} />
+    </div>
+  )
+}
+
+export function TableSkeleton() {
+  return (
+    <div className="animate-fade-in space-y-6">
+      <div className="pt-2 pb-6">
+        <div className="skeleton-title mb-2" />
+        <div className="skeleton-text w-2/5" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="skeleton-metric" />
+        <div className="skeleton-metric" />
+        <div className="skeleton-metric" />
+        <div className="skeleton-metric" />
+      </div>
+      <div className="skeleton-chart" style={{ height: 300 }} />
+    </div>
+  )
+}

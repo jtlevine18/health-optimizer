@@ -59,6 +59,24 @@
     @apply p-5;
   }
 
+  /* ── Accent card (left-border, clinical record style) ── */
+  .card-accent {
+    @apply bg-white rounded-[10px] border border-warm-border;
+    border-left: 3px solid #2a9d8f;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .card-accent:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+
+  .card-accent.accent-amber { border-left-color: #d4a019; }
+  .card-accent.accent-red { border-left-color: #e63946; }
+  .card-accent.accent-blue { border-left-color: #1565C0; }
+  .card-accent.accent-green { border-left-color: #2a9d8f; }
+  .card-accent.accent-purple { border-left-color: #7B1FA2; }
+
   /* ── Metric cards ── */
   .metric-card {
     @apply bg-white rounded-[10px] border border-warm-border p-5;
@@ -185,11 +203,11 @@
     border: 1px solid rgba(124, 58, 237, 0.44);
   }
 
-  .badge-dengue {
+  .badge-teal {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold font-sans;
-    background: rgba(234, 88, 12, 0.18);
-    color: #ea580c;
-    border: 1px solid rgba(234, 88, 12, 0.44);
+    background: rgba(42, 157, 143, 0.14);
+    color: #2a9d8f;
+    border: 1px solid rgba(42, 157, 143, 0.35);
   }
 
   /* ── Tables ── */
@@ -262,8 +280,8 @@
 
   /* ── Stage cards (Dashboard) ── */
   .stage-card {
-    @apply bg-white rounded-[14px] border border-warm-border relative overflow-hidden;
-    padding: 22px 20px 16px;
+    @apply bg-white rounded-[10px] border border-warm-border relative overflow-hidden;
+    padding: 20px 18px 16px;
     text-decoration: none;
     color: inherit;
     font-family: 'DM Sans', sans-serif;
@@ -280,7 +298,61 @@
   .section-header {
     @apply uppercase text-[0.78rem] font-sans font-semibold text-warm-muted pb-2 mb-4;
     letter-spacing: 1.5px;
-    border-bottom: 2px solid #d4a019;
+    border-bottom: 2px solid #2a9d8f;
+  }
+
+  /* ── Alert banner (stockout warnings) ── */
+  .alert-banner {
+    @apply rounded-[10px] p-4 mb-6;
+    background: linear-gradient(135deg, rgba(230, 57, 70, 0.06) 0%, rgba(230, 126, 34, 0.06) 100%);
+    border: 1px solid rgba(230, 57, 70, 0.2);
+  }
+
+  .alert-banner-amber {
+    @apply rounded-[10px] p-4 mb-6;
+    background: linear-gradient(135deg, rgba(212, 160, 25, 0.06) 0%, rgba(230, 126, 34, 0.06) 100%);
+    border: 1px solid rgba(212, 160, 25, 0.2);
+  }
+
+  /* ── Stock matrix cell ── */
+  .stock-cell {
+    @apply rounded-md text-[10px] font-mono font-semibold text-center;
+    min-width: 36px;
+    padding: 4px 6px;
+  }
+
+  /* ── Loading skeletons ── */
+  .skeleton {
+    @apply rounded-md;
+    background: linear-gradient(90deg, #f0ede8 25%, #e8e4de 50%, #f0ede8 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  .skeleton-text {
+    @apply skeleton rounded;
+    height: 14px;
+  }
+
+  .skeleton-title {
+    @apply skeleton rounded;
+    height: 28px;
+    width: 60%;
+  }
+
+  .skeleton-card {
+    @apply skeleton rounded-[10px];
+    height: 100px;
+  }
+
+  .skeleton-metric {
+    @apply skeleton rounded-[10px];
+    height: 88px;
+  }
+
+  .skeleton-chart {
+    @apply skeleton rounded-[10px];
+    height: 200px;
   }
 }
 
@@ -320,6 +392,11 @@
   @keyframes tabEnter {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 }
 

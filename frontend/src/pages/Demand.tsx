@@ -7,10 +7,13 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
+  Legend,
 } from 'recharts'
 import MetricCard from '../components/MetricCard'
-import { LoadingSpinner, ErrorState } from '../components/LoadingState'
+import { TableSkeleton, ErrorState } from '../components/LoadingState'
 import { useDemandForecast, useModelInfo } from '../lib/api'
+import { AlertTriangle } from 'lucide-react'
 
 function changeColor(pct: number): string {
   if (pct < 0) return '#2a9d8f'
@@ -27,6 +30,19 @@ function riskBadgeClass(level: string): string {
   return 'badge-slate'
 }
 
+const darkTooltipStyle = {
+  backgroundColor: '#1a1a1a',
+  border: 'none',
+  borderRadius: 8,
+  color: '#e0dcd5',
+  fontFamily: '"DM Sans", sans-serif',
+  fontSize: '0.8rem',
+}
+
+function truncate(str: string, len: number): string {
+  return str.length > len ? str.slice(0, len - 1) + '\u2026' : str
+}
+
 export default function Demand() {
   const { data, isLoading, isError, refetch } = useDemandForecast()
   const modelInfo = useModelInfo()
@@ -35,6 +51,8 @@ export default function Demand() {
   )
 
   const forecasts = data?.forecasts ?? []
+
+  // ── Metric computations ──────────────────────────────────────────────────
 
   const avgChange = useMemo(() => {
     if (!forecasts.length) return 0
@@ -55,7 +73,31 @@ export default function Demand() {
     )
   }, [forecasts])
 
-  // Climate factors tab data
+  const highRiskCount = useMemo(() => {
+    return forecasts.filter(
+      (f) => f.risk_level.toLowerCase() === 'high' || f.risk_level.toLowerCase() === 'critical',
+    ).length
+  }, [forecasts])
+
+  // ── Demand trend bar chart data (top 12 by predicted demand) ─────────────
+
+  const demandTrendData = useMemo(() => {
+    return [...forecasts]
+      .sort((a, b) => b.predicted_demand_monthly - a.predicted_demand_monthly)
+      .slice(0, 12)
+      .map((f) => ({
+        name: truncate(f.drug_name, 16),
+        fullName: f.drug_name,
+        baseline: f.baseline_demand_monthly,
+        predicted: f.predicted_demand_monthly,
+        isHighRisk:
+          f.risk_level.toLowerCase() === 'high' ||
+          f.risk_level.toLowerCase() === 'critical',
+      }))
+  }, [forecasts])
+
+  // ── Climate factors tab data ─────────────────────────────────────────────
+
   const climateData = useMemo(() => {
     const byFacility: Record<string, { totalChange: number; count: number }> =
       {}
@@ -75,7 +117,26 @@ export default function Demand() {
     }))
   }, [forecasts])
 
-  // Feature importance data for horizontal bar chart
+  // ── Demand multiplier by category (horizontal bar) ───────────────────────
+
+  const categoryMultiplierData = useMemo(() => {
+    const byCategory: Record<string, { total: number; count: number }> = {}
+    forecasts.forEach((f) => {
+      const cat = f.category ?? 'Uncategorized'
+      if (!byCategory[cat]) byCategory[cat] = { total: 0, count: 0 }
+      byCategory[cat].total += f.demand_multiplier
+      byCategory[cat].count += 1
+    })
+    return Object.entries(byCategory)
+      .map(([category, d]) => ({
+        category,
+        multiplier: parseFloat((d.total / Math.max(d.count, 1)).toFixed(2)),
+      }))
+      .sort((a, b) => b.multiplier - a.multiplier)
+  }, [forecasts])
+
+  // ── Feature importance data for horizontal bar chart ─────────────────────
+
   const featureImportanceData = useMemo(() => {
     const importances =
       modelInfo.data?.model_metrics?.feature_importances ?? {}
@@ -89,7 +150,9 @@ export default function Demand() {
       .sort((a, b) => b.importance - a.importance)
   }, [modelInfo.data])
 
-  if (isLoading) return <LoadingSpinner />
+  // ── Loading / Error ──────────────────────────────────────────────────────
+
+  if (isLoading) return <TableSkeleton />
   if (isError) return <ErrorState onRetry={() => refetch()} />
 
   const mm = modelInfo.data?.model_metrics
@@ -103,9 +166,11 @@ export default function Demand() {
         </p>
       </div>
 
+      {/* ── Metric cards (5) ────────────────────────────────────────────── */}
+
       <div data-tour="demand-metrics" className="mb-8">
         <div className="section-header">Forecast Summary</div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-stagger">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 animate-stagger">
           <MetricCard
             label="Medicines Forecasted"
             value={forecasts.length}
@@ -126,8 +191,15 @@ export default function Demand() {
             value={`${Math.round(avgConfidence * 100)}%`}
             subtitle="how reliable the forecast is"
           />
+          <MetricCard
+            label="High Risk"
+            value={highRiskCount}
+            subtitle="high or critical risk forecasts"
+          />
         </div>
       </div>
+
+      {/* ── Tabs ────────────────────────────────────────────────────────── */}
 
       <div data-tour="demand-tabs">
         <div className="tab-list mb-6">
@@ -151,62 +223,146 @@ export default function Demand() {
           </button>
         </div>
 
+        {/* ── Forecast tab ──────────────────────────────────────────────── */}
+
         {activeTab === 'forecast' && (
-          <div className="animate-tab-enter table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Drug</th>
-                  <th>Category</th>
-                  <th>Baseline Demand</th>
-                  <th>Predicted Demand</th>
-                  <th>Change</th>
-                  <th>Confidence</th>
-                  <th>Climate Driven</th>
-                  <th>Risk Level</th>
-                </tr>
-              </thead>
-              <tbody>
-                {forecasts.map((f, i) => (
-                  <tr key={`${f.facility_id}-${f.drug_id}-${i}`}>
-                    <td className="font-semibold text-[#1a1a1a]">
-                      {f.drug_name}
-                    </td>
-                    <td>{f.category ?? '--'}</td>
-                    <td>{f.baseline_demand_monthly.toLocaleString()}</td>
-                    <td>{f.predicted_demand_monthly.toLocaleString()}</td>
-                    <td>
-                      {(() => {
-                        const changePct = (f.demand_multiplier - 1) * 100
-                        return (
-                          <span
-                            className="font-semibold"
-                            style={{ color: changeColor(changePct) }}
-                          >
-                            {changePct >= 0 ? '+' : ''}
-                            {changePct.toFixed(1)}%
-                          </span>
-                        )
-                      })()}
-                    </td>
-                    <td>{Math.round(f.confidence * 100)}%</td>
-                    <td className="text-xs">
-                      {f.climate_driven ? 'Yes' : 'No'}
-                    </td>
-                    <td>
-                      <span className={riskBadgeClass(f.risk_level)}>
-                        {f.risk_level}
-                      </span>
-                    </td>
+          <div className="animate-tab-enter space-y-6">
+            {/* Demand trend grouped bar chart */}
+            {demandTrendData.length > 0 && (
+              <div className="card card-body">
+                <h3 className="text-sm font-semibold font-sans text-[#1a1a1a] mb-4">
+                  Baseline vs Predicted Demand (Top {demandTrendData.length})
+                </h3>
+                <div style={{ width: '100%', height: 300 }}>
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={demandTrendData}
+                      margin={{ top: 10, right: 20, bottom: 40, left: 10 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e0dcd5" />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 10, fill: '#555' }}
+                        angle={-35}
+                        textAnchor="end"
+                        height={60}
+                        interval={0}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: '#888' }}
+                        tickFormatter={(v: number) =>
+                          v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
+                        }
+                      />
+                      <Tooltip
+                        contentStyle={darkTooltipStyle}
+                        formatter={(value: number, name: string) => [
+                          value.toLocaleString(),
+                          name === 'baseline' ? 'Baseline' : 'Predicted',
+                        ]}
+                        labelFormatter={(label: string) => {
+                          const item = demandTrendData.find(
+                            (d) => d.name === label,
+                          )
+                          return item?.fullName ?? label
+                        }}
+                      />
+                      <Legend
+                        wrapperStyle={{ fontSize: 11, fontFamily: '"DM Sans", sans-serif' }}
+                        formatter={(value: string) =>
+                          value === 'baseline' ? 'Baseline' : 'Predicted'
+                        }
+                      />
+                      <Bar
+                        dataKey="baseline"
+                        fill="#ccc8c0"
+                        radius={[3, 3, 0, 0]}
+                        barSize={18}
+                      />
+                      <Bar dataKey="predicted" radius={[3, 3, 0, 0]} barSize={18}>
+                        {demandTrendData.map((entry, idx) => (
+                          <Cell
+                            key={idx}
+                            fill={entry.isHighRisk ? '#e63946' : '#2a9d8f'}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Forecast table */}
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Drug</th>
+                    <th>Category</th>
+                    <th>Baseline Demand</th>
+                    <th>Predicted Demand</th>
+                    <th>Change</th>
+                    <th>Confidence</th>
+                    <th>Climate Driven</th>
+                    <th>Risk Level</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {forecasts.map((f, i) => (
+                    <tr key={`${f.facility_id}-${f.drug_id}-${i}`}>
+                      <td className="font-semibold text-[#1a1a1a]">
+                        {f.drug_name}
+                      </td>
+                      <td>{f.category ?? '--'}</td>
+                      <td>{f.baseline_demand_monthly.toLocaleString()}</td>
+                      <td>
+                        <div>
+                          {f.predicted_demand_monthly.toLocaleString()}
+                        </div>
+                        {f.prediction_interval && (
+                          <div className="text-xs text-warm-muted mt-0.5">
+                            range: {f.prediction_interval.lower.toLocaleString()} &ndash;{' '}
+                            {f.prediction_interval.upper.toLocaleString()}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        {(() => {
+                          const changePct = (f.demand_multiplier - 1) * 100
+                          return (
+                            <span
+                              className="font-semibold"
+                              style={{ color: changeColor(changePct) }}
+                            >
+                              {changePct >= 0 ? '+' : ''}
+                              {changePct.toFixed(1)}%
+                            </span>
+                          )
+                        })()}
+                      </td>
+                      <td>{Math.round(f.confidence * 100)}%</td>
+                      <td className="text-xs">
+                        {f.climate_driven ? 'Yes' : 'No'}
+                      </td>
+                      <td>
+                        <span className={riskBadgeClass(f.risk_level)}>
+                          {f.risk_level}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
+        {/* ── Weather Impact tab ────────────────────────────────────────── */}
+
         {activeTab === 'climate' && (
-          <div className="animate-tab-enter">
+          <div className="animate-tab-enter space-y-6">
+            {/* Existing: Weather impact by facility */}
             <div className="card card-body">
               <h3 className="text-sm font-semibold font-sans text-[#1a1a1a] mb-4">
                 Weather Impact by Facility
@@ -226,16 +382,7 @@ export default function Demand() {
                       height={60}
                     />
                     <YAxis tick={{ fontSize: 11, fill: '#888' }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1a1a1a',
-                        border: 'none',
-                        borderRadius: 8,
-                        color: '#e0dcd5',
-                        fontFamily: '"DM Sans", sans-serif',
-                        fontSize: '0.8rem',
-                      }}
-                    />
+                    <Tooltip contentStyle={darkTooltipStyle} />
                     <Bar
                       dataKey="Demand Change %"
                       fill="#2563eb"
@@ -245,13 +392,88 @@ export default function Demand() {
                 </ResponsiveContainer>
               </div>
             </div>
+
+            {/* New: Demand multiplier by drug category (horizontal) */}
+            {categoryMultiplierData.length > 0 && (
+              <div className="card card-body">
+                <h3 className="text-sm font-semibold font-sans text-[#1a1a1a] mb-1">
+                  Demand Multiplier by Drug Category
+                </h3>
+                <p className="text-xs text-warm-muted mb-4">
+                  Average weather-adjusted demand multiplier. Categories above 1.5x are highlighted.
+                </p>
+                <div
+                  style={{
+                    width: '100%',
+                    height: Math.max(
+                      200,
+                      categoryMultiplierData.length * 36,
+                    ),
+                  }}
+                >
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={categoryMultiplierData}
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, bottom: 5, left: 120 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#e0dcd5"
+                      />
+                      <XAxis
+                        type="number"
+                        tick={{ fontSize: 11, fill: '#888' }}
+                        domain={[0, 'auto']}
+                        tickFormatter={(v: number) => `${v}x`}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="category"
+                        tick={{ fontSize: 11, fill: '#555' }}
+                        width={110}
+                      />
+                      <Tooltip
+                        contentStyle={darkTooltipStyle}
+                        formatter={(value: number) => [
+                          `${value}x`,
+                          'Avg Multiplier',
+                        ]}
+                      />
+                      <Bar
+                        dataKey="multiplier"
+                        radius={[0, 4, 4, 0]}
+                        barSize={20}
+                      >
+                        {categoryMultiplierData.map((entry, idx) => (
+                          <Cell
+                            key={idx}
+                            fill={
+                              entry.multiplier > 1.5 ? '#e63946' : '#2a9d8f'
+                            }
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                {categoryMultiplierData.some((d) => d.multiplier > 1.5) && (
+                  <div className="flex items-center gap-2 mt-3 text-xs text-warm-muted">
+                    <AlertTriangle size={14} className="text-[#e63946] shrink-0" />
+                    Categories in red have unusually high weather-driven demand surges.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
+
+        {/* ── How It Works tab ──────────────────────────────────────────── */}
 
         {activeTab === 'model' && (
           <div className="animate-tab-enter space-y-6">
             {modelInfo.isLoading ? (
-              <LoadingSpinner message="Loading model info..." />
+              <TableSkeleton />
             ) : modelInfo.isError ? (
               <ErrorState onRetry={() => modelInfo.refetch()} />
             ) : (
@@ -259,17 +481,38 @@ export default function Demand() {
                 {/* Model type badges */}
                 <div className="flex items-center gap-2 flex-wrap mb-2">
                   {mm?.model_type?.includes('xgboost') && (
-                    <span className="text-xs font-sans font-semibold px-3 py-1 rounded-full" style={{ backgroundColor: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}>
+                    <span
+                      className="text-xs font-sans font-semibold px-3 py-1 rounded-full"
+                      style={{
+                        backgroundColor: '#dbeafe',
+                        color: '#1e40af',
+                        border: '1px solid #93c5fd',
+                      }}
+                    >
                       AI-Powered Forecast
                     </span>
                   )}
                   {mm?.model_type?.includes('residual') && (
-                    <span className="text-xs font-sans font-semibold px-3 py-1 rounded-full" style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                    <span
+                      className="text-xs font-sans font-semibold px-3 py-1 rounded-full"
+                      style={{
+                        backgroundColor: '#fef3c7',
+                        color: '#92400e',
+                        border: '1px solid #fcd34d',
+                      }}
+                    >
                       + Error Correction
                     </span>
                   )}
                   {!mm?.model_type?.includes('xgboost') && (
-                    <span className="text-xs font-sans font-semibold px-3 py-1 rounded-full" style={{ backgroundColor: '#e0e7ff', color: '#3730a3', border: '1px solid #a5b4fc' }}>
+                    <span
+                      className="text-xs font-sans font-semibold px-3 py-1 rounded-full"
+                      style={{
+                        backgroundColor: '#e0e7ff',
+                        color: '#3730a3',
+                        border: '1px solid #a5b4fc',
+                      }}
+                    >
                       Disease-Based Formulas
                     </span>
                   )}
@@ -282,39 +525,88 @@ export default function Demand() {
                     <div>
                       <div className="section-header">Forecast Accuracy</div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <MetricCard label="Avg Error" value={pm?.rmse?.toFixed(2) ?? mm?.rmse?.toFixed(1) ?? '--'} subtitle="typical prediction error" />
-                        <MetricCard label="Avg Deviation" value={pm?.mae?.toFixed(2) ?? mm?.mae?.toFixed(1) ?? '--'} subtitle="average miss" />
-                        <MetricCard label="Accuracy" value={pm?.r2 ? `${(pm.r2 * 100).toFixed(1)}%` : mm?.r_squared ? `${((mm.r_squared) * 100).toFixed(0)}%` : '--'} subtitle="of demand variation explained" />
-                        <MetricCard label="Factors Used" value={mm?.features?.length ?? pm?.feature_importances ? Object.keys(pm?.feature_importances ?? {}).length : 0} subtitle="data inputs to the model" />
+                        <MetricCard
+                          label="Avg Error"
+                          value={
+                            pm?.rmse?.toFixed(2) ??
+                            mm?.rmse?.toFixed(1) ??
+                            '--'
+                          }
+                          subtitle="typical prediction error"
+                        />
+                        <MetricCard
+                          label="Avg Deviation"
+                          value={
+                            pm?.mae?.toFixed(2) ??
+                            mm?.mae?.toFixed(1) ??
+                            '--'
+                          }
+                          subtitle="average miss"
+                        />
+                        <MetricCard
+                          label="Accuracy"
+                          value={
+                            pm?.r2
+                              ? `${(pm.r2 * 100).toFixed(1)}%`
+                              : mm?.r_squared
+                                ? `${(mm.r_squared * 100).toFixed(0)}%`
+                                : '--'
+                          }
+                          subtitle="of demand variation explained"
+                        />
+                        <MetricCard
+                          label="Factors Used"
+                          value={
+                            mm?.features?.length ??
+                            (pm?.feature_importances
+                              ? Object.keys(pm.feature_importances).length
+                              : 0)
+                          }
+                          subtitle="data inputs to the model"
+                        />
                       </div>
                     </div>
                   )
                 })()}
 
                 {/* Residual correction metrics */}
-                {mm?.residual_model && (mm?.residual_model.rmse_residual_before ?? 0) > 0 && (
-                  <div>
-                    <div className="section-header">Automatic Error Correction</div>
-                    <p className="text-xs text-warm-body mb-3 -mt-1">A second model reviews the first model's predictions and corrects systematic mistakes.</p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <MetricCard
-                        label="Error Before"
-                        value={mm.residual_model.rmse_residual_before?.toFixed(2) ?? '--'}
-                        subtitle="before correction"
-                      />
-                      <MetricCard
-                        label="Error After"
-                        value={mm.residual_model.rmse_residual_after?.toFixed(2) ?? '--'}
-                        subtitle="after correction"
-                      />
-                      <MetricCard
-                        label="Improvement"
-                        value={`${mm.residual_model.rmse_improvement_pct?.toFixed(1) ?? 0}%`}
-                        subtitle="error reduced"
-                      />
+                {mm?.residual_model &&
+                  (mm.residual_model.rmse_residual_before ?? 0) > 0 && (
+                    <div>
+                      <div className="section-header">
+                        Automatic Error Correction
+                      </div>
+                      <p className="text-xs text-warm-body mb-3 -mt-1">
+                        A second model reviews the first model's predictions
+                        and corrects systematic mistakes.
+                      </p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <MetricCard
+                          label="Error Before"
+                          value={
+                            mm.residual_model.rmse_residual_before?.toFixed(
+                              2,
+                            ) ?? '--'
+                          }
+                          subtitle="before correction"
+                        />
+                        <MetricCard
+                          label="Error After"
+                          value={
+                            mm.residual_model.rmse_residual_after?.toFixed(
+                              2,
+                            ) ?? '--'
+                          }
+                          subtitle="after correction"
+                        />
+                        <MetricCard
+                          label="Improvement"
+                          value={`${mm.residual_model.rmse_improvement_pct?.toFixed(1) ?? 0}%`}
+                          subtitle="error reduced"
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Feature importances bar chart */}
                 {featureImportanceData.length > 0 && (
@@ -322,14 +614,54 @@ export default function Demand() {
                     <h3 className="text-sm font-semibold font-sans text-[#1a1a1a] mb-4">
                       What Drives the Forecast
                     </h3>
-                    <div style={{ width: '100%', height: Math.max(260, featureImportanceData.length * 24) }}>
+                    <div
+                      style={{
+                        width: '100%',
+                        height: Math.max(
+                          300,
+                          featureImportanceData.length * 26,
+                        ),
+                      }}
+                    >
                       <ResponsiveContainer>
-                        <BarChart data={featureImportanceData} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 140 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e0dcd5" />
-                          <XAxis type="number" tick={{ fontSize: 11, fill: '#888' }} domain={[0, 100]} unit="%" />
-                          <YAxis type="category" dataKey="feature" tick={{ fontSize: 10, fill: '#555' }} width={130} />
-                          <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: 'none', borderRadius: 8, color: '#e0dcd5', fontFamily: '"DM Sans", sans-serif', fontSize: '0.8rem' }} formatter={(value: number) => [`${value}%`, 'Importance']} />
-                          <Bar dataKey="importance" fill="#d4a019" radius={[0, 4, 4, 0]} />
+                        <BarChart
+                          data={featureImportanceData}
+                          layout="vertical"
+                          margin={{
+                            top: 5,
+                            right: 30,
+                            bottom: 5,
+                            left: 140,
+                          }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e0dcd5"
+                          />
+                          <XAxis
+                            type="number"
+                            tick={{ fontSize: 11, fill: '#888' }}
+                            domain={[0, 100]}
+                            unit="%"
+                          />
+                          <YAxis
+                            type="category"
+                            dataKey="feature"
+                            tick={{ fontSize: 10, fill: '#555' }}
+                            width={130}
+                          />
+                          <Tooltip
+                            contentStyle={darkTooltipStyle}
+                            formatter={(value: number) => [
+                              `${value}%`,
+                              'Importance',
+                            ]}
+                          />
+                          <Bar
+                            dataKey="importance"
+                            fill="#2a9d8f"
+                            radius={[0, 4, 4, 0]}
+                          />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -338,27 +670,48 @@ export default function Demand() {
 
                 {/* ML Stack overview */}
                 {modelInfo.data?.ml_stack && (
-                  <div className="card card-body">
+                  <div
+                    className="card card-body card-accent"
+                    style={{ borderLeft: '3px solid #2a9d8f' }}
+                  >
                     <h3 className="text-sm font-semibold font-sans text-[#1a1a1a] mb-3">
                       Technology Behind the Forecast
                     </h3>
                     <div className="space-y-2.5">
-                      {Object.entries(modelInfo.data.ml_stack).filter(([k]) => k !== 'agents').map(([key, val]) => (
-                        <div key={key} className="flex items-start gap-3 text-xs">
-                          <span className="font-semibold text-warm-body w-36 shrink-0 capitalize">
-                            {key.replace(/_/g, ' ')}
-                          </span>
-                          <span className="text-warm-muted">
-                            {typeof val === 'object' && val !== null && 'type' in val ? (val as { type: string }).type : String(val)}
-                          </span>
-                        </div>
-                      ))}
+                      {Object.entries(modelInfo.data.ml_stack)
+                        .filter(([k]) => k !== 'agents')
+                        .map(([key, val]) => (
+                          <div
+                            key={key}
+                            className="flex items-start gap-3 text-xs"
+                          >
+                            <span className="font-semibold text-warm-body w-36 shrink-0 capitalize">
+                              {key.replace(/_/g, ' ')}
+                            </span>
+                            <span className="text-warm-muted">
+                              {typeof val === 'object' &&
+                              val !== null &&
+                              'type' in val
+                                ? (val as { type: string }).type
+                                : String(val)}
+                            </span>
+                          </div>
+                        ))}
                       <div className="border-t border-warm-border pt-2 mt-2">
-                        <span className="font-semibold text-xs text-warm-body">Claude Agents</span>
+                        <span className="font-semibold text-xs text-warm-body">
+                          Claude Agents
+                        </span>
                         <div className="mt-1.5 space-y-1">
-                          {Object.entries(modelInfo.data.ml_stack.agents).map(([name, desc]) => (
-                            <div key={name} className="flex items-start gap-3 text-xs">
-                              <span className="font-medium text-warm-body w-36 shrink-0 capitalize">{name}</span>
+                          {Object.entries(
+                            modelInfo.data.ml_stack.agents,
+                          ).map(([name, desc]) => (
+                            <div
+                              key={name}
+                              className="flex items-start gap-3 text-xs"
+                            >
+                              <span className="font-medium text-warm-body w-36 shrink-0 capitalize">
+                                {name}
+                              </span>
                               <span className="text-warm-muted">{desc}</span>
                             </div>
                           ))}
@@ -373,7 +726,9 @@ export default function Demand() {
                     <h3 className="text-sm font-semibold font-sans text-[#1a1a1a] mb-2">
                       Model Description
                     </h3>
-                    <p className="text-sm text-warm-body leading-relaxed m-0">{mm.note}</p>
+                    <p className="text-sm text-warm-body leading-relaxed m-0">
+                      {mm.note}
+                    </p>
                   </div>
                 )}
               </>
