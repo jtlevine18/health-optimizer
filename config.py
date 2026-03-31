@@ -29,8 +29,8 @@ ESSENTIAL_MEDICINES = [
         "name": "ORS sachets (1L)",
         "category": "Diarrhoeal",
         "unit": "sachets",
-        "unit_cost_usd": 0.08,
-        "consumption_per_1000_month": 120,
+        "unit_cost_usd": 0.06,  # UNICEF co-pack price
+        "consumption_per_1000_month": 95,  # Lagos: lower diarrhoea prevalence (5.2% vs 12.8% national)
         "shelf_life_months": 36,
         "storage": "room_temp",
         "seasonal_multiplier": {"rainy": 1.8, "dry": 0.7},  # cholera/diarrhoea spikes
@@ -42,7 +42,7 @@ ESSENTIAL_MEDICINES = [
         "category": "Diarrhoeal",
         "unit": "tablets",
         "unit_cost_usd": 0.02,
-        "consumption_per_1000_month": 90,
+        "consumption_per_1000_month": 70,  # paired with ORS for under-5 diarrhoea
         "shelf_life_months": 24,
         "storage": "room_temp",
         "seasonal_multiplier": {"rainy": 1.6, "dry": 0.8},
@@ -53,11 +53,11 @@ ESSENTIAL_MEDICINES = [
         "name": "Artemether-Lumefantrine (AL) 20/120mg",
         "category": "Antimalarials",
         "unit": "courses",
-        "unit_cost_usd": 0.50,
-        "consumption_per_1000_month": 65,
+        "unit_cost_usd": 0.80,  # Novartis public-sector price
+        "consumption_per_1000_month": 46,  # Lagos: 55 malaria cases/1000/yr ÷ 12 months
         "shelf_life_months": 24,
         "storage": "room_temp",
-        "seasonal_multiplier": {"rainy": 2.2, "dry": 0.5},  # strong malaria seasonality
+        "seasonal_multiplier": {"rainy": 2.0, "dry": 0.5},  # peak October (4-6wk lag after Sept rains)
         "critical": True,
     },
     {
@@ -66,7 +66,7 @@ ESSENTIAL_MEDICINES = [
         "category": "Diagnostics",
         "unit": "tests",
         "unit_cost_usd": 0.45,
-        "consumption_per_1000_month": 55,
+        "consumption_per_1000_month": 40,  # tracks ACT usage; Lagos lower malaria burden
         "shelf_life_months": 18,
         "storage": "cool_dry",
         "seasonal_multiplier": {"rainy": 2.0, "dry": 0.6},
@@ -198,10 +198,10 @@ DRUG_MAP = {d["drug_id"]: d for d in ESSENTIAL_MEDICINES}
 CATEGORIES = sorted(set(d["category"] for d in ESSENTIAL_MEDICINES))
 
 # Lead time assumptions (days from order to delivery)
-# Lagos State Central Medical Store (Oshodi) → facilities
+# Lagos State Medical Store (LSMS), Oshodi — two Pharmagrade warehouses
 LEAD_TIMES = {
-    "central_warehouse": 5,   # LSMOH Central Medical Store, Oshodi
-    "regional_depot": 10,     # Zonal medical stores
+    "central_warehouse": 7,   # LSMS → General Hospital (urban)
+    "regional_depot": 10,     # LSMS → PHC (urban) or via zonal stores
     "international": 60,      # UNICEF / Global Fund procurement
 }
 
