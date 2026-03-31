@@ -60,10 +60,11 @@ def test_ensemble_wider_intervals():
 
 
 def test_build_series_basic():
+    """Works with underscore-prefixed columns (from XGBoostDemandModel.build_training_data)."""
     df = pd.DataFrame({
-        "facility_id": ["F1", "F1", "F1", "F2", "F2", "F2"],
-        "drug_id": ["D1", "D1", "D1", "D1", "D1", "D1"],
-        "month": [1, 2, 3, 1, 2, 3],
+        "_facility_id": ["F1", "F1", "F1", "F2", "F2", "F2"],
+        "_drug_id": ["D1", "D1", "D1", "D1", "D1", "D1"],
+        "_month_offset": [1, 2, 3, 1, 2, 3],
         "consumption_rate_per_1000": [10.0, 12.0, 11.0, 20.0, 22.0, 21.0],
     })
     series = build_series_from_training_data(df)
@@ -72,12 +73,24 @@ def test_build_series_basic():
     assert series["F1|D1"] == [10.0, 12.0, 11.0]
 
 
+def test_build_series_plain_columns():
+    """Also works with plain column names (no underscore prefix)."""
+    df = pd.DataFrame({
+        "facility_id": ["F1", "F1", "F1"],
+        "drug_id": ["D1", "D1", "D1"],
+        "month": [1, 2, 3],
+        "consumption_rate_per_1000": [10.0, 12.0, 11.0],
+    })
+    series = build_series_from_training_data(df)
+    assert "F1|D1" in series
+
+
 def test_build_series_skips_single_point():
     """Need at least 2 points for a meaningful series."""
     df = pd.DataFrame({
-        "facility_id": ["F1"],
-        "drug_id": ["D1"],
-        "month": [1],
+        "_facility_id": ["F1"],
+        "_drug_id": ["D1"],
+        "_month_offset": [1],
         "consumption_rate_per_1000": [10.0],
     })
     series = build_series_from_training_data(df)
@@ -86,9 +99,9 @@ def test_build_series_skips_single_point():
 
 def test_build_series_sorts_by_month():
     df = pd.DataFrame({
-        "facility_id": ["F1", "F1", "F1"],
-        "drug_id": ["D1", "D1", "D1"],
-        "month": [3, 1, 2],
+        "_facility_id": ["F1", "F1", "F1"],
+        "_drug_id": ["D1", "D1", "D1"],
+        "_month_offset": [3, 1, 2],
         "consumption_rate_per_1000": [30.0, 10.0, 20.0],
     })
     series = build_series_from_training_data(df)

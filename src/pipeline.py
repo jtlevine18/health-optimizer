@@ -36,6 +36,9 @@ from src.forecasting.chronos_model import (
     ensemble_predictions,
 )
 from src.anomaly.detector import ConsumptionAnomalyDetector
+
+# Singleton — avoids reloading the 9M-parameter model on every pipeline run
+_chronos_forecaster = ChronosBoltForecaster()
 from src.optimizer import optimize, plan_to_dict, ProcurementPlan
 from src.procurement_agent import ProcurementAgent, ProcurementRecommendation
 from src.store import store
@@ -716,13 +719,12 @@ class HealthSupplyChainPipeline:
                 model_type = "xgboost"
 
             # Layer 2.5: Chronos-Bolt neural foundation model (zero-shot)
-            chronos = ChronosBoltForecaster()
             chronos_preds: dict = {}
-            if chronos.is_available:
+            if _chronos_forecaster.is_available:
                 if training_df is None:
                     training_df = xgb_model.build_training_data(months_back=6, seed=42)
                 series = build_series_from_training_data(training_df)
-                chronos_preds = chronos.predict_batch(series, prediction_length=1)
+                chronos_preds = _chronos_forecaster.predict_batch(series, prediction_length=1)
                 if chronos_preds:
                     model_type += "+chronos_bolt"
                     logger.info("Chronos-Bolt predictions: %d series", len(chronos_preds))
@@ -771,7 +773,7 @@ class HealthSupplyChainPipeline:
                 "model_type": model_type,
                 "primary_model": xgb_model.metrics if xgb_model.is_trained() else {},
                 "residual_model": residual_model.metrics if residual_model.is_trained() else {},
-                "chronos_model": chronos.model_info,
+                "chronos_model": _chronos_forecaster.model_info,
                 "features": list(xgb_model.feature_importances.keys()) if xgb_model.is_trained() else [],
                 "feature_importances": xgb_model.feature_importances if xgb_model.is_trained() else {},
             }

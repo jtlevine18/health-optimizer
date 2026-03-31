@@ -14,8 +14,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import torch
-
 logger = logging.getLogger(__name__)
 
 
@@ -39,6 +37,7 @@ class ChronosBoltForecaster:
             return
         self._loaded = True
         try:
+            import torch
             from chronos import ChronosBoltPipeline
 
             self._pipeline = ChronosBoltPipeline.from_pretrained(
@@ -89,23 +88,26 @@ class ChronosBoltForecaster:
         if not self._available or not series_dict:
             return {}
 
+        import torch
+
         keys = list(series_dict.keys())
         contexts = [torch.tensor(series_dict[k], dtype=torch.float32) for k in keys]
 
         try:
-            quantiles, mean = self._pipeline.predict_quantiles(
-                contexts,
-                prediction_length=prediction_length,
-                quantile_levels=[0.1, 0.5, 0.9],
-            )
+            with torch.no_grad():
+                quantiles, mean = self._pipeline.predict_quantiles(
+                    contexts,
+                    prediction_length=prediction_length,
+                    quantile_levels=[0.1, 0.5, 0.9],
+                )
 
-            # quantiles shape: [batch, prediction_length, n_quantiles]
+            # shape: [batch, prediction_length, n_quantiles] where quantiles are [0.1, 0.5, 0.9]
             results: dict[str, dict[str, float]] = {}
             for i, key in enumerate(keys):
                 results[key] = {
-                    "median": max(0.0, float(quantiles[i, 0, 1])),   # 50th percentile
-                    "lower_10": max(0.0, float(quantiles[i, 0, 0])), # 10th percentile
-                    "upper_90": max(0.0, float(quantiles[i, 0, 2])), # 90th percentile
+                    "median": max(0.0, float(quantiles[i, 0, 1])),
+                    "lower_10": max(0.0, float(quantiles[i, 0, 0])),
+                    "upper_90": max(0.0, float(quantiles[i, 0, 2])),
                 }
             return results
 
@@ -124,10 +126,15 @@ def build_series_from_training_data(
     """
     import pandas as pd  # noqa: F811
 
+    # Columns use underscore prefix (_facility_id, _drug_id) as metadata
+    fac_col = "_facility_id" if "_facility_id" in training_df.columns else "facility_id"
+    drug_col = "_drug_id" if "_drug_id" in training_df.columns else "drug_id"
+    month_col = "_month_offset" if "_month_offset" in training_df.columns else "month"
+
     series: dict[str, list[float]] = {}
-    for (fac, drug), grp in training_df.groupby(["facility_id", "drug_id"]):
-        vals = grp.sort_values("month")["consumption_rate_per_1000"].tolist()
-        if len(vals) >= 2:  # need at least 2 points for a meaningful series
+    for (fac, drug), grp in training_df.groupby([fac_col, drug_col]):
+        vals = grp.sort_values(month_col)["consumption_rate_per_1000"].tolist()
+        if len(vals) >= 2:
             series[f"{fac}|{drug}"] = vals
     return series
 

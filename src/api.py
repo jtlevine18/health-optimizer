@@ -41,6 +41,7 @@ from config import (
     DEFAULT_PARAMS,
     PIPELINE_STEPS,
 )
+from src.forecasting.chronos_model import ChronosBoltForecaster
 from src.optimizer import optimize, plan_to_dict
 from src.store import store
 from src.scheduler import scheduler
@@ -830,15 +831,8 @@ def get_model_info():
             "purpose": "Corrects systematic biases in primary model predictions",
             "metrics": model_metrics.get("residual_model", {}),
         },
-        "chronos_bolt": model_metrics.get("chronos_model", {
-            "name": "Amazon Chronos-Bolt-Tiny",
-            "model_id": "amazon/chronos-bolt-tiny",
-            "parameters": "9M",
-            "pretraining_data": "100B+ observations",
-            "type": "T5 transformer (time-series foundation model)",
-            "inference": "zero-shot (no local training needed)",
-            "status": "available",
-        }),
+        "chronos_bolt": model_metrics.get("chronos_model",
+            ChronosBoltForecaster().model_info),
         "anomaly_detection": {
             "type": "Isolation Forest (200 estimators)",
             "purpose": "Flags anomalous consumption patterns for investigation",
