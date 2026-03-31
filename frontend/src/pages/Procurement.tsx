@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import {
   BarChart,
   Bar,
@@ -14,14 +14,11 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ArrowRight } from 'lucide-react'
 import MetricCard from '../components/MetricCard'
-import StatusBadge from '../components/StatusBadge'
 import { LoadingSpinner, ErrorState } from '../components/LoadingState'
 import {
   useProcurementPlan,
   useFacilities,
-  useStockLevels,
   type ProcurementPlan,
-  type Facility,
 } from '../lib/api'
 
 // Fix Leaflet default icon issue with bundlers
@@ -79,7 +76,6 @@ type Tab = 'overview' | 'action' | 'impact' | 'evidence'
 export default function Procurement() {
   const procurement = useProcurementPlan()
   const facilities = useFacilities()
-  const stock = useStockLevels()
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [selectedFacility, setSelectedFacility] = useState<string | null>(null)
 
@@ -183,9 +179,8 @@ export default function Procurement() {
           ))}
         </div>
 
-        {/* ── TAB 1: OVERVIEW (MAP) ──────────────────────────────────────── */}
-        {activeTab === 'overview' && (
-          <div className="animate-tab-enter space-y-6">
+        {/* ── TAB 1: OVERVIEW (MAP) — use display toggle to avoid remounting Leaflet ── */}
+        <div className="space-y-6" style={{ display: activeTab === 'overview' ? 'block' : 'none' }}>
             {/* Map */}
             <div className="rounded-[10px] border border-warm-border overflow-hidden" style={{ height: 420 }}>
               <MapContainer
@@ -358,7 +353,6 @@ export default function Procurement() {
               </div>
             )}
           </div>
-        )}
 
         {/* ── TAB 2: ACTION PLAN ─────────────────────────────────────────── */}
         {activeTab === 'action' && (

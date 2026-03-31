@@ -672,7 +672,6 @@ export default function Demand() {
                 {modelInfo.data?.ml_stack && (
                   <div
                     className="card card-body card-accent"
-                    style={{ borderLeft: '3px solid #2a9d8f' }}
                   >
                     <h3 className="text-sm font-semibold font-sans text-[#1a1a1a] mb-3">
                       Technology Behind the Forecast

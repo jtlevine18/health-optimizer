@@ -29,11 +29,6 @@ function stockColor(days: number): string {
   return '#e63946'
 }
 
-/** Pick contrasting text for stock cell — white on all health-status backgrounds */
-function stockTextColor(_days: number): string {
-  return '#fff'
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -326,7 +321,7 @@ export default function Dashboard() {
                             className="stock-cell"
                             style={{
                               background: stockColor(days),
-                              color: stockTextColor(days),
+                              color: '#fff',
                             }}
                             title={`${days} days of stock`}
                           >
