@@ -1,4 +1,5 @@
-export function formatRs(n: number): string {
+export function formatRs(n: number | null | undefined): string {
+  if (n == null) return '\u20b9--'
   return '\u20b9' + n.toLocaleString('en-IN')
 }
 
