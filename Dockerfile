@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -c "\
 from huggingface_hub import snapshot_download; \
 print('Downloading chronos-bolt-base...'); \
-snapshot_download('amazon/chronos-bolt-base'); \
+snapshot_download('amazon/chronos-bolt-tiny'); \
 print('Done.')" && echo "Chronos model cached" || echo "WARN: Chronos pre-download failed"
 
 COPY config.py .

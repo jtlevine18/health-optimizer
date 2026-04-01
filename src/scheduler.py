@@ -98,8 +98,10 @@ class PipelineScheduler:
         try:
             import asyncio
             import os
-            logger.info("Starting scheduled pipeline run")
+            import sys
+            print("[PIPELINE] Starting pipeline run", flush=True)
             has_claude = bool(os.getenv("ANTHROPIC_API_KEY"))
+            print(f"[PIPELINE] Claude API: {'enabled' if has_claude else 'disabled'}", flush=True)
             pipeline = MarketIntelligencePipeline(
                 days_back=30,
                 use_claude_extraction=has_claude,
@@ -113,9 +115,13 @@ class PipelineScheduler:
             self._state["last_status"] = result.status
             self._save_state()
 
-            logger.info("Scheduled pipeline run complete -- status=%s", result.status)
-        except Exception:
-            logger.exception("Scheduled pipeline run failed")
+            print(f"[PIPELINE] Complete -- status={result.status}, duration={result.duration_s:.1f}s, cost=${result.total_cost_usd:.4f}", flush=True)
+            for s in result.steps:
+                print(f"[PIPELINE]   {s.step}: {s.status} ({s.duration_s:.1f}s) {s.errors or ''}", flush=True)
+        except Exception as exc:
+            print(f"[PIPELINE] FAILED: {exc}", flush=True)
+            import traceback
+            traceback.print_exc()
             self._state["last_status"] = "failed"
             self._save_state()
         finally:

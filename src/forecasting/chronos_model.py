@@ -58,8 +58,8 @@ except ImportError as e:
 # Model selection priority:
 # 1. chronos-bolt-base (Bolt V2, ~250x faster on CPU) -- requires Chronos2Pipeline
 # 2. chronos-t5-small (V1, 20M params, solid CPU perf) -- always works with ChronosPipeline
-BOLT_MODEL_ID = "amazon/chronos-bolt-base"
-V1_MODEL_ID = "amazon/chronos-t5-small"
+BOLT_MODEL_ID = "amazon/chronos-bolt-tiny"
+V1_MODEL_ID = "amazon/chronos-t5-tiny"
 
 QUANTILE_LOW = 0.1   # 10th percentile for CI lower
 QUANTILE_MID = 0.5   # median for point forecast
@@ -92,11 +92,11 @@ class ChronosForecaster:
         self._load_time_s: float = 0.0
         self._model_variant: str = ""  # "bolt" or "t5"
 
-    def load(self, timeout_s: float = 300) -> bool:
+    def load(self, timeout_s: float = 60) -> bool:
         """Load the Chronos pipeline. Tries Bolt V2, falls back to T5-small V1.
 
         Args:
-            timeout_s: Max seconds to wait for model download/load (default 5 min).
+            timeout_s: Max seconds to wait for model download/load (default 60s).
                        If exceeded, returns False so the pipeline falls back to XGBoost.
         """
         if not CHRONOS_AVAILABLE:
