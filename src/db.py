@@ -143,13 +143,14 @@ def get_engine():
         if not DATABASE_URL:
             return None
 
-        kwargs: dict[str, Any] = {"pool_pre_ping": True}
+        kwargs: dict[str, Any] = {"pool_pre_ping": True, "pool_timeout": 10}
         if DATABASE_URL.startswith("sqlite"):
             pass
         else:
-            kwargs["pool_size"] = 5
-            kwargs["max_overflow"] = 10
-            connect_args: dict[str, Any] = {}
+            kwargs["pool_size"] = 2
+            kwargs["max_overflow"] = 3
+            kwargs["pool_recycle"] = 300
+            connect_args: dict[str, Any] = {"connect_timeout": 10}
             if "sslmode" not in DATABASE_URL:
                 connect_args["sslmode"] = "require"
             kwargs["connect_args"] = connect_args
