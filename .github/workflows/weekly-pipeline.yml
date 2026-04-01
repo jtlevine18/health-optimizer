@@ -2,27 +2,59 @@ name: Weekly Pipeline Run
 
 on:
   schedule:
-    - cron: "30 0 * * 1"  # Monday 00:30 UTC
-  workflow_dispatch:       # Manual trigger
+    - cron: '0 1 * * 1'  # Monday 01:00 UTC = 06:30 IST
+  workflow_dispatch: {}    # Manual trigger from GitHub UI
 
 jobs:
   trigger-pipeline:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
+      - name: Wake HF Space
+        run: |
+          echo "Restarting Market Intelligence Space..."
+          curl -s -X POST \
+            "https://huggingface.co/api/spaces/jtlevine/market-intelligence/restart" \
+            -H "Authorization: Bearer ${{ secrets.HF_TOKEN }}" \
+            || true
+          echo "Waiting for Space to boot..."
+          sleep 90
+
       - name: Trigger pipeline run
         run: |
-          echo "Triggering pipeline at HF Space..."
-          RESPONSE=$(curl -s -X POST \
-            "https://jtlevine-health-supply-optimizer.hf.space/api/pipeline/trigger" \
+          echo "Triggering pipeline..."
+          TRIGGER=$(curl -s -X POST \
+            "https://jtlevine-market-intelligence.hf.space/api/pipeline/trigger" \
             -H "Content-Type: application/json")
-          echo "Response: $RESPONSE"
+          echo "Trigger response: $TRIGGER"
 
-      - name: Wait for completion
+      - name: Wait for pipeline completion
         run: |
-          echo "Waiting 180s for pipeline to complete..."
-          sleep 180
+          MAX_WAIT=900  # 15 minutes
+          ELAPSED=0
+          INTERVAL=30
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            HEALTH=$(curl -s "https://jtlevine-market-intelligence.hf.space/health" 2>/dev/null || echo '{}')
+            HAS_DATA=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('pipeline_data', False))" 2>/dev/null || echo "false")
+            echo "[$ELAPSED s] pipeline_data: $HAS_DATA"
+            if [ "$HAS_DATA" = "True" ]; then
+              echo "Pipeline completed successfully!"
+              STATS=$(curl -s "https://jtlevine-market-intelligence.hf.space/api/pipeline/stats" 2>/dev/null || echo '{}')
+              echo "Stats: $STATS"
+              exit 0
+            fi
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          echo "Timed out waiting for pipeline"
+          exit 1
 
-      - name: Check health
+      - name: Pause HF Space
+        if: always()
         run: |
-          STATUS=$(curl -s "https://jtlevine-health-supply-optimizer.hf.space/health")
-          echo "Health: $STATUS"
+          echo "Pausing Space to stop billing..."
+          curl -s -X POST \
+            "https://huggingface.co/api/spaces/jtlevine/market-intelligence/pause" \
+            -H "Authorization: Bearer ${{ secrets.HF_TOKEN }}" \
+            || true
+          echo "Space paused."
