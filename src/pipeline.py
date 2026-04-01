@@ -121,7 +121,10 @@ class MarketIntelligencePipeline:
         run_id = str(uuid.uuid4())[:8]
         started_at = datetime.now(timezone.utc)
 
-        persistence.init_db()
+        try:
+            persistence.init_db()
+        except Exception:
+            logger.warning("Database init failed -- continuing without persistence")
         steps: list[StepResult] = []
         total_cost = 0.0
 
@@ -810,7 +813,10 @@ class MarketIntelligencePipeline:
             }
 
             store.update(run_data)
-            persistence.save_pipeline_run(run_data)
+            try:
+                persistence.save_pipeline_run(run_data)
+            except Exception:
+                logger.warning("Database save failed -- data still available via API")
 
         except Exception:
             logger.exception("Failed to update store from pipeline")
