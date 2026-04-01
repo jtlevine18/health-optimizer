@@ -32,8 +32,10 @@ from src.extraction.agent import ExtractionAgent, RuleBasedExtractor
 from src.reconciliation.agent import ReconciliationAgent, RuleBasedReconciler
 from src.forecasting.price_model import (
     XGBoostPriceModel,
+    ChronosXGBoostForecaster,
     PriceForecast,
     generate_training_data,
+    _extract_price_histories,
 )
 from src.optimizer import optimize_sell, recommendation_to_dict, SellRecommendation, assess_credit_readiness, credit_readiness_to_dict
 from src.recommendation_agent import RecommendationAgent, FarmerRecommendation
@@ -107,6 +109,7 @@ class MarketIntelligencePipeline:
         self._farmer_recommendations: list[FarmerRecommendation] = []
         self._model_metrics: dict = {}
         self._price_conflicts: list[dict] = []
+        self._forecaster: ChronosXGBoostForecaster | None = None
 
         # Token tracking
         self._extraction_tokens: int = 0
@@ -396,7 +399,11 @@ class MarketIntelligencePipeline:
     # ── Step 4: FORECAST ─────────────────────────────────────────────────
 
     async def _step_forecast(self, run_id: str) -> StepResult:
-        """Price forecasting at 7/14/30 day horizons."""
+        """Price forecasting at 7/14/30 day horizons.
+
+        Uses ChronosXGBoostForecaster with fallback chain:
+        Chronos-2 + XGBoost MOS -> XGBoost standalone -> seasonal baseline.
+        """
         t0 = time.time()
 
         try:
@@ -407,6 +414,9 @@ class MarketIntelligencePipeline:
             # Build feature DataFrame from reconciled prices
             rows = []
             today = date.today()
+
+            # Also collect price histories for Chronos-2 input
+            price_histories: dict[tuple, np.ndarray] = {}
 
             for mandi in MANDIS:
                 mid = mandi.mandi_id
@@ -425,6 +435,10 @@ class MarketIntelligencePipeline:
                     # Compute features from historical data
                     agm_records = [r for r in self._agmarknet_prices.get(mid, []) if r.commodity_id == cid]
                     prices = [r.modal_price_rs for r in sorted(agm_records, key=lambda x: x.date)]
+
+                    # Store price history for Chronos-2
+                    if prices:
+                        price_histories[(mid, cid)] = np.array(prices, dtype=float)
 
                     trend_7 = float(np.polyfit(range(len(prices[-7:])), prices[-7:], 1)[0]) if len(prices) >= 7 else 0
                     trend_14 = float(np.polyfit(range(len(prices[-14:])), prices[-14:], 1)[0]) if len(prices) >= 14 else 0
@@ -474,29 +488,38 @@ class MarketIntelligencePipeline:
 
             features_df = pd.DataFrame(rows)
 
-            # Train or load model
-            model = XGBoostPriceModel()
+            # Use ChronosXGBoostForecaster (Chronos-2 + XGBoost MOS, with fallback chain)
+            # Cache the forecaster to avoid reloading Chronos model on every run
+            if self._forecaster is None:
+                self._forecaster = ChronosXGBoostForecaster()
+            model = self._forecaster
             model_type = "seasonal_baseline"
 
             try:
                 model.load()
-                model_type = "xgboost"
-                logger.info("Loaded pre-trained XGBoost price model")
+                model_type = model.model_used
+                logger.info("Loaded pre-trained forecaster: %s", model_type)
             except (FileNotFoundError, Exception):
                 logger.info("No pre-trained model -- training on synthetic data")
                 try:
                     training_df = generate_training_data(months_back=6, seed=42)
-                    model.train(training_df)
-                    model.save()
-                    model_type = "xgboost"
-                except Exception as exc:
-                    logger.warning("XGBoost training failed: %s -- using seasonal baseline", exc)
+                    training_histories = _extract_price_histories(training_df)
 
-            self._forecasts = model.predict(features_df)
+                    # If no real price histories from pipeline, use synthetic ones for Chronos-2
+                    if not price_histories:
+                        price_histories = training_histories
+
+                    model.train(training_df, price_histories=training_histories)
+                    model.save()
+                    model_type = model.model_used
+                except Exception as exc:
+                    logger.warning("Model training failed: %s -- using seasonal baseline", exc)
+
+            self._forecasts = model.predict(features_df, price_histories=price_histories)
             self._model_metrics = {
                 "model_type": model_type,
                 **model.metrics,
-                "features": model.FEATURES,
+                "features": XGBoostPriceModel.FEATURES,
                 "feature_importances": model.feature_importances,
             }
 

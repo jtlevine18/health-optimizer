@@ -62,7 +62,7 @@
   /* ── Accent card (left-border, clinical record style) ── */
   .card-accent {
     @apply bg-white rounded-[10px] border border-warm-border;
-    border-left: 3px solid #d4a019;
+    border-left: 3px solid #0d7377;
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   }
 
@@ -71,7 +71,7 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   }
 
-  .card-accent.accent-amber { border-left-color: #d4a019; }
+  .card-accent.accent-amber { border-left-color: #0d7377; }
   .card-accent.accent-red { border-left-color: #e63946; }
   .card-accent.accent-blue { border-left-color: #1565C0; }
   .card-accent.accent-green { border-left-color: #2a9d8f; }
@@ -98,6 +98,12 @@
     @apply font-serif font-bold text-[#1a1a1a] text-2xl mt-1;
   }
 
+  .metric-card .price-value {
+    @apply text-[#1a1a1a] text-2xl mt-1;
+    font-family: 'Source Serif 4', serif;
+    font-weight: 800;
+  }
+
   /* ── Buttons ── */
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5
@@ -120,7 +126,7 @@
 
   .btn-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 3px 8px rgba(212, 160, 25, 0.25);
+    box-shadow: 0 3px 8px rgba(13, 115, 119, 0.25);
   }
 
   .btn-secondary {
@@ -156,9 +162,9 @@
 
   .badge-amber {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold font-sans;
-    background: rgba(212, 160, 25, 0.18);
-    color: #d4a019;
-    border: 1px solid rgba(212, 160, 25, 0.44);
+    background: rgba(13, 115, 119, 0.18);
+    color: #0d7377;
+    border: 1px solid rgba(13, 115, 119, 0.44);
   }
 
   .badge-red {
@@ -239,7 +245,7 @@
   }
 
   .table-container tbody tr:hover {
-    background: rgba(250, 248, 245, 0.6);
+    background: rgba(248, 250, 250, 0.6);
   }
 
   /* ── Tabs ── */
@@ -297,8 +303,8 @@
   /* ── Section headers ── */
   .section-header {
     @apply uppercase text-[0.78rem] font-sans font-semibold text-warm-muted pb-2 mb-4;
-    letter-spacing: 1.5px;
-    border-bottom: 2px solid #d4a019;
+    letter-spacing: 1.0px;
+    border-bottom: 2px solid #0d7377;
   }
 
   /* ── Alert banner ── */
@@ -310,8 +316,8 @@
 
   .alert-banner-amber {
     @apply rounded-[10px] p-4 mb-6;
-    background: linear-gradient(135deg, rgba(212, 160, 25, 0.06) 0%, rgba(230, 126, 34, 0.06) 100%);
-    border: 1px solid rgba(212, 160, 25, 0.2);
+    background: linear-gradient(135deg, rgba(13, 115, 119, 0.06) 0%, rgba(42, 176, 181, 0.06) 100%);
+    border: 1px solid rgba(13, 115, 119, 0.2);
   }
 
   /* ── Stock matrix cell ── */

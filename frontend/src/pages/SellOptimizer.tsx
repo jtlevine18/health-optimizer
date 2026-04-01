@@ -1,6 +1,16 @@
 import { useState, useMemo } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Polyline, Popup } from 'react-leaflet'
 import '../lib/leaflet-fix'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  LabelList,
+} from 'recharts'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import MetricCard from '../components/MetricCard'
 import { LoadingSpinner, ErrorState } from '../components/LoadingState'
@@ -9,7 +19,7 @@ import { formatRs } from '../lib/format'
 
 function netPriceColor(net: number, best: number): string {
   if (net >= best * 0.95) return '#2a9d8f'
-  if (net >= best * 0.85) return '#d4a019'
+  if (net >= best * 0.85) return '#0d7377'
   return '#e63946'
 }
 
@@ -180,13 +190,120 @@ export default function SellOptimizer() {
         </div>
       </div>
 
+      {/* ── Waterfall: Net Price Breakdown ────────────────────────────── */}
+      {activeFarmer && (() => {
+        const best = activeFarmer.best_option
+        const marketPrice = best.market_price_rs
+        const transport = best.transport_cost_rs
+        const storage = best.storage_loss_rs
+        const fee = best.mandi_fee_rs
+        const net = best.net_price_rs
+
+        const waterfallData = [
+          {
+            name: 'Market Price',
+            base: 0,
+            value: marketPrice,
+            fill: '#0d7377',
+            label: formatRs(marketPrice),
+          },
+          {
+            name: 'Transport',
+            base: marketPrice - transport,
+            value: transport,
+            fill: '#e63946',
+            label: `-${formatRs(transport)}`,
+          },
+          {
+            name: 'Storage Loss',
+            base: marketPrice - transport - storage,
+            value: storage,
+            fill: '#e63946',
+            label: `-${formatRs(storage)}`,
+          },
+          {
+            name: 'Mandi Fee',
+            base: marketPrice - transport - storage - fee,
+            value: fee,
+            fill: '#e63946',
+            label: `-${formatRs(fee)}`,
+          },
+          {
+            name: 'Net Price',
+            base: 0,
+            value: net,
+            fill: '#2a9d8f',
+            label: formatRs(net),
+          },
+        ]
+
+        return (
+          <div data-tour="waterfall" className="mb-8">
+            <div className="section-header">How net price is calculated</div>
+            <p className="text-xs text-warm-muted mb-4 -mt-1">
+              {activeFarmer.farmer_name} {'\u2192'} {best.mandi_name} ({best.sell_timing})
+            </p>
+            <div className="card card-body">
+              <div style={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={waterfallData} margin={{ top: 20, right: 20, bottom: 5, left: 10 }}>
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: '#666' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#888' }}
+                      tickFormatter={(v: number) => formatRs(v)}
+                      width={75}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1a1a1a',
+                        border: 'none',
+                        borderRadius: 8,
+                        color: '#e0dcd5',
+                        fontFamily: '"DM Sans", sans-serif',
+                        fontSize: '0.8rem',
+                      }}
+                      formatter={(_val: number, _name: string, props: { payload?: { label?: string; name?: string } }) => {
+                        const item = props.payload
+                        return [item?.label ?? '', item?.name ?? '']
+                      }}
+                    />
+                    {/* Invisible base bar */}
+                    <Bar dataKey="base" stackId="waterfall" fill="transparent" isAnimationActive={false}>
+                      <LabelList content={() => null} />
+                    </Bar>
+                    {/* Visible value bar */}
+                    <Bar dataKey="value" stackId="waterfall" radius={[4, 4, 0, 0]}>
+                      {waterfallData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                      <LabelList
+                        dataKey="label"
+                        position="top"
+                        style={{ fontSize: 11, fontWeight: 600, fill: '#1a1a1a' }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── Credit Readiness ─────────────────────────────────────────── */}
       {activeFarmer?.credit_readiness && (
-        <div className="mb-8">
+        <div data-tour="credit-readiness" className="mb-8">
           <div className="section-header">{activeFarmer.farmer_name} — Credit Readiness</div>
           {(() => {
             const cr = activeFarmer.credit_readiness
-            const readinessColor = cr.readiness === 'strong' ? '#2a9d8f' : cr.readiness === 'moderate' ? '#d4a019' : '#e63946'
+            const readinessColor = cr.readiness === 'strong' ? '#2a9d8f' : cr.readiness === 'moderate' ? '#0d7377' : '#e63946'
             const readinessLabel = cr.readiness === 'strong' ? 'Strong' : cr.readiness === 'moderate' ? 'Moderate' : 'Not Yet'
             return (
               <div className="card-accent p-5" style={{ borderLeftColor: readinessColor, borderLeftWidth: 4 }}>
@@ -337,7 +454,7 @@ export default function SellOptimizer() {
                 center={[activeFarmer.farmer_lat, activeFarmer.farmer_lon]}
                 radius={10}
                 pathOptions={{
-                  color: '#d4a019',
+                  color: '#0d7377',
                   weight: 3,
                   fillColor: '#fff',
                   fillOpacity: 1,
@@ -360,7 +477,7 @@ export default function SellOptimizer() {
           {/* Map legend */}
           <div className="flex items-center gap-5 mt-3 text-xs text-warm-muted">
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full border-2" style={{ borderColor: '#d4a019', background: '#fff' }} />
+              <div className="w-3 h-3 rounded-full border-2" style={{ borderColor: '#0d7377', background: '#fff' }} />
               Farmer
             </div>
             <div className="flex items-center gap-1.5">
@@ -368,7 +485,7 @@ export default function SellOptimizer() {
               Best net price
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full" style={{ background: '#d4a019' }} />
+              <div className="w-3 h-3 rounded-full" style={{ background: '#0d7377' }} />
               Mid range
             </div>
             <div className="flex items-center gap-1.5">

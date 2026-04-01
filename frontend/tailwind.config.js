@@ -7,12 +7,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        cream: '#faf8f5',
+        cream: '#f8fafa',
         gold: {
-          DEFAULT: '#d4a019',
-          hover: '#b8880f',
-          light: '#f0d878',
-          dark: '#a67c10',
+          DEFAULT: '#0d7377',
+          hover: '#095c5f',
+          light: '#5cc4c8',
+          dark: '#074f52',
         },
         warm: {
           border: '#e0dcd5',
@@ -24,11 +24,11 @@ export default {
         },
         sidebar: {
           DEFAULT: '#1a1a1a',
-          end: '#222018',
+          end: '#0f1a1a',
           hover: '#2a2a3e',
         },
         success: '#2a9d8f',
-        warning: '#d4a019',
+        warning: '#0d7377',
         error: '#e63946',
         info: '#1565C0',
       },

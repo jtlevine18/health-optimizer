@@ -5,7 +5,6 @@ import {
   IndianRupee,
   Settings,
   FileText,
-  Wheat,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -20,23 +19,23 @@ export default function Sidebar() {
   return (
     <aside
       className="fixed top-0 left-0 z-50 h-full w-56 flex flex-col"
-      style={{ background: 'linear-gradient(180deg, #1a2018 0%, #1a1a1a 100%)' }}
+      style={{ background: 'linear-gradient(180deg, #0f1a1a 0%, #1a1a1a 100%)' }}
     >
       {/* Brand */}
       <div className="flex items-center h-16 px-5 border-b border-white/10">
         <NavLink to="/" className="flex items-center gap-2.5 no-underline">
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: '#d4a019' }}
+            style={{ background: '#0d7377' }}
           >
-            <Wheat size={18} className="text-white" />
+            <Store size={18} className="text-white" />
           </div>
           <div>
             <h1 className="text-sm font-bold text-white leading-tight font-serif m-0">
               Market Agent
             </h1>
             <p className="text-[10px] text-[#e0dcd5] font-sans font-medium uppercase tracking-wider m-0">
-              TAMIL NADU
+              TAMIL NADU MANDIS
             </p>
           </div>
         </NavLink>
@@ -59,7 +58,7 @@ export default function Sidebar() {
             }
             style={({ isActive }) =>
               isActive
-                ? { background: 'rgba(212, 160, 25, 0.15)', color: '#e8c44a' }
+                ? { background: 'rgba(13, 115, 119, 0.15)', color: '#2ab0b5' }
                 : undefined
             }
           >

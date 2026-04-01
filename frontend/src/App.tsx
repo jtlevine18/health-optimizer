@@ -9,6 +9,7 @@ import SellOptimizer from './pages/SellOptimizer'
 import Pipeline from './pages/Pipeline'
 import Inputs from './pages/Inputs'
 import { tourSteps, stepRoutes, tourStyles } from './lib/tour'
+import TourTooltip from './components/TourTooltip'
 
 export default function App() {
   const [searchParams] = useSearchParams()
@@ -19,12 +20,12 @@ export default function App() {
   // Auto-start on first visit, or when ?tour=true
   useEffect(() => {
     const forced = searchParams.get('tour') === 'true'
-    const seen = localStorage.getItem('market_tour_v1') === '1'
+    const seen = localStorage.getItem('market_tour_v2') === '1'
     if (forced || !seen) {
       const timer = setTimeout(() => {
         setRunTour(true)
         setStepIndex(0)
-        localStorage.setItem('market_tour_v1', '1')
+        localStorage.setItem('market_tour_v2', '1')
       }, 1500)
       return () => clearTimeout(timer)
     }
@@ -111,12 +112,12 @@ export default function App() {
         stepIndex={stepIndex}
         continuous
         showSkipButton
-        showProgress
         scrollToFirstStep
         disableOverlayClose
         spotlightClicks={false}
         callback={handleJoyrideCallback}
         styles={tourStyles}
+        tooltipComponent={TourTooltip}
         floaterProps={{ disableAnimation: true }}
         locale={{
           back: 'Back',

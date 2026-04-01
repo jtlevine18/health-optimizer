@@ -1,115 +1,129 @@
 import type { Step } from 'react-joyride'
 
 export const tourSteps: Step[] = [
-  // ── Market Prices (/) ──
+  // ── Step 1: Welcome (/) ──
   {
     target: '[data-tour="hero"]',
-    title: 'Meet your market broker',
+    title: 'Lakshmi grows rice in Thanjavur',
     content:
-      'Lakshmi harvests rice in Thanjavur. She has three mandis within 40km, each reporting different prices. ' +
-      'This AI agent scrapes both government price databases, reconciles the discrepancies, and tells her exactly ' +
-      'where and when to sell \u2014 down to the rupee.',
+      'She harvests in September. Three mandis within 40km, each quoting a different price. ' +
+      'She sells at the nearest one for whatever the middleman offers \u2014 and loses 15\u201330% of what her rice is actually worth. ' +
+      'This tool is her broker.',
     placement: 'bottom',
     disableBeacon: true,
   },
+  // ── Step 2: The hook (/) ──
   {
-    target: '[data-tour="stage-cards"]',
-    title: 'Three stages, one decision',
+    target: '[data-tour="callout"]',
+    title: 'Two databases. Different prices. Same market.',
     content:
-      'First: scrape prices from Agmarknet (data.gov.in API) and eNAM for 15 Tamil Nadu mandis. ' +
-      'Second: when they disagree \u2014 and they do, 5\u201312% of the time \u2014 investigate and reconcile. ' +
-      'Third: compute the best (mandi, timing) combination after transport costs and storage losses.',
+      'India has two government price databases: Agmarknet and eNAM. They disagree 5\u201312% of the time. ' +
+      'Nobody reconciles them. Farmers trust whichever middleman they ask. This tool investigates the gap.',
     placement: 'bottom',
     disableBeacon: true,
   },
+  // ── Step 3: Live data (/) ──
   {
     target: '[data-tour="metrics"]',
-    title: 'Live numbers',
+    title: '15 real mandis. 10 commodities. Updated daily.',
     content:
-      '15 mandis, 10 commodities (rice, groundnut, turmeric, cotton, onion...), and every price conflict ' +
-      'resolved automatically. These update after each pipeline run.',
+      'These are real regulated markets from Thanjavur to Tirunelveli, with prices from the actual Agmarknet API. ' +
+      'The number next to \u2018Conflicts\u2019 shows how many times the two databases disagreed today.',
     placement: 'top',
     disableBeacon: true,
   },
-  // ── Inputs (/inputs) ──
+  // ── Step 4: Price table (/) ──
+  {
+    target: '[data-tour="price-table"]',
+    title: 'Every price has a story',
+    content:
+      'Green means above seasonal average \u2014 good time to sell. Red means below. ' +
+      'Hover over any cell to see both source prices and how they were reconciled. ' +
+      'The confidence score tells you how much to trust the number.',
+    placement: 'top',
+    disableBeacon: true,
+  },
+  // ── Step 5: Navigate to Inputs (/inputs) ──
   {
     target: '[data-tour="inputs-title"]',
-    title: 'The problem nobody solves',
+    title: 'This is the page nobody else has built',
     content:
-      'Agmarknet says \u20b92,100 for rice at Thanjavur. eNAM says \u20b92,250. Same market, same day. ' +
-      'No existing tool reconciles these \u2014 farmers and traders just guess. ' +
-      'This agent investigates using 5 different checks.',
+      'When Agmarknet says \u20b92,100 and eNAM says \u20b92,250 for the same rice at the same mandi \u2014 ' +
+      'what do you trust? This page shows you exactly how the AI investigated and decided.',
     placement: 'bottom',
     disableBeacon: true,
   },
+  // ── Step 6: Reconciliation detail (/inputs) ──
   {
     target: '[data-tour="inputs-reconciled"]',
     title: 'Investigation, not averaging',
     content:
-      'The agent checks neighboring mandis, seasonal norms, arrival volumes, and transport arbitrage. ' +
-      'If Thanjavur says \u20b92,100 but every neighbor says \u20b92,200+, Thanjavur\u2019s data is probably stale. ' +
-      'Each resolution shows the full reasoning chain.',
+      'The AI doesn\u2019t split the difference. It checks five things: which source is fresher, ' +
+      'what neighboring mandis report, whether the price fits the season, whether arrival volumes explain the gap, ' +
+      'and whether transport costs make the spread plausible. Then it decides.',
     placement: 'top',
     disableBeacon: true,
   },
-  {
-    target: '[data-tour="inputs-metrics"]',
-    title: 'Trust, quantified',
-    content:
-      'Every reconciled price gets a confidence score. Poor-reporting mandis score lower. ' +
-      'The system is transparent about what it knows and what it\u2019s guessing.',
-    placement: 'bottom',
-    disableBeacon: true,
-  },
-  // ── Forecast (/forecast) ──
+  // ── Step 7: Navigate to Forecast (/forecast) ──
   {
     target: '[data-tour="forecast-title"]',
-    title: 'Should she sell now or wait?',
+    title: 'Should she sell now or wait two weeks?',
     content:
-      'Rice prices typically drop 15% in October (post-harvest glut) and climb through May. ' +
-      'The model uses 15 features \u2014 seasonal patterns, rainfall, mandi arrivals \u2014 to predict ' +
-      'prices at 7, 14, and 30 days. That turns "sell now or wait" from a guess into a calculation.',
+      'A neural price model (Chronos-2) trained on commodity patterns predicts prices at 7, 14, and 30 days \u2014 ' +
+      'with real confidence intervals from probabilistic sampling, not guesses. ' +
+      'Rice typically drops 15% in October as harvest floods the market, then climbs through May.',
     placement: 'bottom',
     disableBeacon: true,
   },
+  // ── Step 8: Forecast confidence (/forecast) ──
   {
     target: '[data-tour="forecast-metrics"]',
-    title: 'Confidence matters',
+    title: 'The confidence band matters',
     content:
-      'Forecasts come with confidence intervals. A prediction of \u20b92,300 \u00b1 \u20b9150 means something different ' +
-      'than \u20b92,300 \u00b1 \u20b9500. The system shows both so the farmer can weigh the risk.',
+      '\u20b92,300 \u00b1 \u20b9150 is a strong signal. \u20b92,300 \u00b1 \u20b9500 means wait for more data. ' +
+      'The wider the band, the less you should trust the number. ' +
+      'Chronos-2 generates these intervals natively \u2014 they\u2019re real probability distributions, not estimates.',
     placement: 'bottom',
     disableBeacon: true,
   },
-  // ── Sell Advisor (/sell) ──
+  // ── Step 9: Navigate to Sell (/sell) ──
   {
     target: '[data-tour="sell-title"]',
     title: 'The full calculation',
     content:
-      'Lakshmi (rice, Thanjavur), Kumar (turmeric, Erode), Meena (banana, Dindigul). For each farmer, ' +
-      'the agent evaluates every nearby mandi at every time horizon: market price minus transport, ' +
-      'minus storage loss, minus mandi fees = net price. Then recommends the best option.',
+      'Kumbakonam offers \u20b9150/quintal more than Thanjavur. But it\u2019s 30km away. Transport costs \u20b980. ' +
+      'Storage at Thanjavur for two weeks loses \u20b945 to spoilage. ' +
+      'The optimizer computes every combination and finds the one that puts the most money in Lakshmi\u2019s pocket.',
     placement: 'bottom',
     disableBeacon: true,
   },
+  // ── Step 10: Net price breakdown (/sell) ──
   {
-    target: '[data-tour="sell-metrics"]',
-    title: 'Real tradeoffs, real numbers',
+    target: '[data-tour="waterfall"]',
+    title: 'Net price, not market price',
     content:
-      'Kumbakonam might offer \u20b9150 more per quintal than Thanjavur, but it\u2019s 30km away. ' +
-      'Transport costs \u20b980. Net gain: \u20b970. Worth the trip? That\u2019s what the options table shows \u2014 ' +
-      'every cost component, transparent.',
-    placement: 'bottom',
+      'Market price minus transport, minus storage loss, minus mandi fees equals net price. ' +
+      'That\u2019s the number that matters. The middleman knows this math. Now Lakshmi does too.',
+    placement: 'top',
     disableBeacon: true,
   },
-  // ── Final (/) ──
+  // ── Step 11: Credit readiness (/sell) ──
+  {
+    target: '[data-tour="credit-readiness"]',
+    title: 'Should she borrow for next season?',
+    content:
+      'Based on her expected harvest revenue, the tool assesses whether an input loan makes sense \u2014 ' +
+      'and caps it at 40% of expected revenue. Green means strong. Amber means proceed with caution. Red means wait.',
+    placement: 'top',
+    disableBeacon: true,
+  },
+  // ── Step 12: Closing (/) ──
   {
     target: '[data-tour="hero"]',
     title: 'The hard problem remains',
     content:
-      'This system automates the journey from messy government data to a personalized sell recommendation. ' +
-      'The hard problems that remain are human: getting smartphones into farmers\u2019 hands, ' +
-      'building trust in data-driven advice, and connecting this to the platforms farmers already use. ' +
+      'The algorithm is the easy part. The hard problems are human: getting smartphones into farmers\u2019 hands, ' +
+      'building trust in data-driven advice, connecting this to the platforms farmers already use. ' +
       'That\u2019s where the investment should go.',
     placement: 'center',
     disableBeacon: true,
@@ -120,14 +134,15 @@ export const stepRoutes: Record<number, string> = {
   0: '/',
   1: '/',
   2: '/',
-  3: '/inputs',
+  3: '/',
   4: '/inputs',
   5: '/inputs',
   6: '/forecast',
   7: '/forecast',
   8: '/sell',
   9: '/sell',
-  10: '/',
+  10: '/sell',
+  11: '/',
 }
 
 export const tourStyles = {
@@ -135,7 +150,7 @@ export const tourStyles = {
     zIndex: 10000,
     arrowColor: '#1a1a1a',
     backgroundColor: '#1a1a1a',
-    primaryColor: '#d4a019',
+    primaryColor: '#0d7377',
     textColor: '#e0dcd5',
     overlayColor: 'rgba(0, 0, 0, 0.45)',
   },
@@ -151,14 +166,14 @@ export const tourStyles = {
     fontFamily: '"Source Serif 4", Georgia, serif',
     fontWeight: 700,
     fontSize: '1.05rem',
-    color: '#d4a019',
+    color: '#0d7377',
     marginBottom: 8,
   },
   tooltipContent: {
     padding: '8px 0 0',
   },
   buttonNext: {
-    backgroundColor: '#d4a019',
+    backgroundColor: '#0d7377',
     color: '#fff',
     borderRadius: 6,
     fontFamily: '"DM Sans", system-ui, sans-serif',

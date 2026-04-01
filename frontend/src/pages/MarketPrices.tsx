@@ -46,7 +46,7 @@ function priceColor(price: number, avgPrice: number): string {
   const ratio = price / avgPrice
   if (ratio >= 1.05) return '#2a9d8f'
   if (ratio <= 0.95) return '#e63946'
-  return '#d4a019'
+  return '#0d7377'
 }
 
 
@@ -128,6 +128,16 @@ export default function MarketPrices() {
         </p>
       </div>
 
+      {/* ── Hook callout ─────────────────────────────────────────────────── */}
+      <div data-tour="callout" className="mb-10 p-6 rounded-xl border-l-4" style={{ borderColor: '#0d7377', background: 'rgba(13, 115, 119, 0.04)' }}>
+        <h2 className="text-xl font-bold text-slate-900" style={{ fontFamily: 'Source Serif 4, serif' }}>
+          Two government databases. Different prices. Same market.
+        </h2>
+        <p className="text-slate-600 mt-2 leading-relaxed">
+          India's Agmarknet and eNAM report wholesale prices for the same commodities at the same mandis — and disagree 5–12% of the time. No existing tool reconciles them. Farmers trust whichever middleman they ask. This tool investigates the gap.
+        </p>
+      </div>
+
       {/* ── Stage Cards ───────────────────────────────────────────────────── */}
       <div data-tour="stage-cards" className="mb-8">
         <div className="section-header">How It Works</div>
@@ -136,7 +146,7 @@ export default function MarketPrices() {
           {/* Card 1: Scraped */}
           <Link to="/inputs" className="card-accent accent-amber no-underline block p-5">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-teal-50 flex items-center justify-center">
                 <FileText size={18} className="text-warning" />
               </div>
               <h3 className="text-sm font-semibold text-[#1a1a1a] font-sans m-0">
@@ -270,7 +280,7 @@ export default function MarketPrices() {
       </div>
 
       {/* ── Price Grid (mandi x commodity) ─────────────────────────────────── */}
-      <div className="mb-8">
+      <div data-tour="price-table" className="mb-8">
         <div className="section-header">Price Overview</div>
         {priceGrid ? (
           <div className="bg-white rounded-[10px] border border-warm-border p-5 overflow-x-auto">
@@ -343,7 +353,7 @@ export default function MarketPrices() {
                                 fontFamily: '"DM Sans", sans-serif',
                               }}
                             >
-                              <div className="font-semibold text-[#d4a019] mb-1">
+                              <div className="font-semibold text-[#0d7377] mb-1">
                                 {entry.commodity_name}
                               </div>
                               <div className="space-y-1">
@@ -393,7 +403,7 @@ export default function MarketPrices() {
                 <span className="text-[11px] text-warm-body font-sans">Above (+5%)</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#d4a019' }} />
+                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#0d7377' }} />
                 <span className="text-[11px] text-warm-body font-sans">Near avg</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -427,7 +437,7 @@ export default function MarketPrices() {
               const conflictCount = conflictsByMandi.get(mandi.mandi_id) ?? 0
               let pinColor = '#2a9d8f'
               if (conflictCount >= 3) pinColor = '#e63946'
-              else if (conflictCount >= 1) pinColor = '#d4a019'
+              else if (conflictCount >= 1) pinColor = '#0d7377'
 
               return (
                 <CircleMarker
@@ -457,7 +467,7 @@ export default function MarketPrices() {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                           <span style={{ color: '#888' }}>Reporting</span>
-                          <span style={{ fontWeight: 600, color: mandi.reporting_quality === 'good' ? '#2a9d8f' : '#d4a019' }}>
+                          <span style={{ fontWeight: 600, color: mandi.reporting_quality === 'good' ? '#2a9d8f' : '#0d7377' }}>
                             {mandi.reporting_quality}
                           </span>
                         </div>
@@ -486,7 +496,7 @@ export default function MarketPrices() {
             No conflicts
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ background: '#d4a019' }} />
+            <div className="w-3 h-3 rounded-full" style={{ background: '#0d7377' }} />
             Some conflicts
           </div>
           <div className="flex items-center gap-1.5">

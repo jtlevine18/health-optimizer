@@ -146,7 +146,13 @@ SYSTEM_PROMPT = (
     "neighboring mandi prices for regional consensus, validate against seasonal norms, "
     "verify arrival volumes, and check for transport arbitrage anomalies.\n\n"
     "For each conflict, decide which price to trust (or take a weighted average) "
-    "and explain your reasoning."
+    "and explain your reasoning.\n\n"
+    "When you have finished investigating, return your final answer as a JSON object "
+    "with exactly this schema:\n"
+    '{"reconciled_prices": [{"mandi_id": "<str>", "commodity_id": "<str>", '
+    '"reconciled_price": <float>, "confidence": <float 0-1>, "reasoning": "<str>"}]}\n\n'
+    "Include one entry per commodity you were asked to reconcile (even if sources agree). "
+    "Return ONLY the JSON object, no markdown fences or extra text."
 )
 
 
@@ -529,6 +535,8 @@ class ReconciliationAgent:
 
         messages: list[dict] = [{"role": "user", "content": "\n".join(parts)}]
 
+        # Tool-use loop: let Claude investigate with tools
+        final_response = None
         for round_num in range(self.MAX_ROUNDS):
             try:
                 response = client.messages.create(
@@ -553,6 +561,7 @@ class ReconciliationAgent:
                     tools_used.append(block.name)
 
             if response.stop_reason == "end_turn" or not tool_calls:
+                final_response = response
                 break
 
             messages.append({"role": "assistant", "content": response.content})
@@ -567,7 +576,200 @@ class ReconciliationAgent:
                 })
 
             messages.append({"role": "user", "content": tool_results})
+        else:
+            # Exhausted MAX_ROUNDS without Claude stopping -- use last response
+            final_response = response
 
         result.tools_used = list(set(tools_used))
         result.tokens_used = total_tokens
+
+        # Extract text from Claude's final response
+        final_text = self._extract_response_text(final_response)
+
+        # If Claude didn't return the structured JSON we need, send a "now decide" prompt
+        needs_decision_prompt = (
+            not final_text or '"reconciled_prices"' not in final_text
+        )
+        if needs_decision_prompt:
+            if final_response is not None:
+                messages.append({"role": "assistant", "content": final_response.content})
+            final_text, extra_tokens = self._send_decision_prompt(
+                client, messages, mandi_id, agmarknet_prices, enam_prices,
+            )
+            total_tokens += extra_tokens
+            result.tokens_used = total_tokens
+
+        # Parse the JSON response into reconciled_prices
+        parsed = self._parse_reconciliation_json(final_text, mandi_id)
+        if parsed:
+            for entry in parsed:
+                commodity_id = entry.get("commodity_id", "")
+                if not commodity_id:
+                    continue
+                result.reconciled_prices[commodity_id] = {
+                    "price_rs": entry.get("reconciled_price", 0),
+                    "confidence": entry.get("confidence", 0.5),
+                    "source_used": "claude_reconciled",
+                    "reasoning": entry.get("reasoning", ""),
+                }
+
+        # Fall back to rule-based for any commodities Claude didn't cover
+        all_commodity_ids = set(agmarknet_prices.keys()) | set(enam_prices.keys())
+        missing = all_commodity_ids - set(result.reconciled_prices.keys())
+        if missing:
+            log.info(
+                "Claude missed %d commodities for mandi %s -- filling with rule-based",
+                len(missing), mandi_id,
+            )
+            missing_agm = {k: v for k, v in agmarknet_prices.items() if k in missing}
+            missing_enam = {k: v for k, v in enam_prices.items() if k in missing}
+            rb = RuleBasedReconciler.reconcile(mandi_id, missing_agm, missing_enam)
+            for cid in missing:
+                if cid in rb.reconciled_prices:
+                    result.reconciled_prices[cid] = rb.reconciled_prices[cid]
+                    result.reconciled_prices[cid]["source_used"] = "rule_based_fallback"
+
+        # Populate conflicts_found from price comparisons
+        for cid in result.reconciled_prices:
+            agm = agmarknet_prices.get(cid, {})
+            enam = enam_prices.get(cid, {})
+            agm_price = agm.get("modal_price_rs", 0)
+            enam_price = enam.get("modal_price_rs", 0)
+            if agm_price > 0 and enam_price > 0:
+                delta_pct = abs(agm_price - enam_price) / agm_price * 100
+                if delta_pct >= 3:
+                    result.conflicts_found.append({
+                        "commodity_id": cid,
+                        "agmarknet_price": agm_price,
+                        "enam_price": enam_price,
+                        "delta_pct": round(delta_pct, 1),
+                        "resolution": result.reconciled_prices[cid].get("source_used", "claude_reconciled"),
+                        "reconciled_price": result.reconciled_prices[cid].get("price_rs", 0),
+                    })
+
+        # Data quality score
+        if result.reconciled_prices:
+            avg_confidence = (
+                sum(v["confidence"] for v in result.reconciled_prices.values())
+                / len(result.reconciled_prices)
+            )
+            conflict_penalty = min(0.3, len(result.conflicts_found) * 0.05)
+            result.data_quality_score = round(max(0, avg_confidence - conflict_penalty), 2)
+
         return result
+
+    def _send_decision_prompt(
+        self,
+        client: Any,
+        messages: list[dict],
+        mandi_id: str,
+        agmarknet_prices: dict[str, dict],
+        enam_prices: dict[str, dict],
+    ) -> tuple[str, int]:
+        """Send a final 'now decide' message to get structured JSON output.
+
+        Returns (response_text, tokens_used).
+        """
+        commodity_ids = list(set(agmarknet_prices.keys()) | set(enam_prices.keys()))
+        decision_prompt = (
+            "You have finished investigating. Now return your final reconciliation decision "
+            "as a JSON object with this exact schema:\n\n"
+            '{"reconciled_prices": [{"mandi_id": "<str>", "commodity_id": "<str>", '
+            '"reconciled_price": <float>, "confidence": <float 0-1>, "reasoning": "<str>"}]}\n\n'
+            f'The mandi_id is "{mandi_id}". '
+            f"Include one entry for each of these commodities: {commodity_ids}. "
+            "Return ONLY the JSON object, no markdown fences or extra text."
+        )
+        messages.append({"role": "user", "content": decision_prompt})
+
+        try:
+            response = client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                system=SYSTEM_PROMPT,
+                messages=messages,
+            )
+            tokens = 0
+            if hasattr(response, "usage"):
+                tokens = getattr(response.usage, "input_tokens", 0) + getattr(response.usage, "output_tokens", 0)
+            return self._extract_response_text(response), tokens
+        except Exception as e:
+            log.error("Claude API error in decision prompt: %s", e)
+            return "", 0
+
+    @staticmethod
+    def _extract_response_text(response) -> str:
+        """Extract concatenated text from a Claude response's content blocks."""
+        if response is None:
+            return ""
+        text_parts = []
+        for block in response.content:
+            if block.type == "text":
+                text_parts.append(block.text)
+        return "\n".join(text_parts).strip()
+
+    @staticmethod
+    def _parse_reconciliation_json(text: str, mandi_id: str) -> list[dict] | None:
+        """Parse the reconciled_prices JSON array from Claude's response.
+
+        Returns the list of price entries, or None if parsing fails.
+        """
+        if not text:
+            return None
+
+        # Strip markdown fences if present despite instructions
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            # Remove opening fence (with optional language tag) and closing fence
+            lines = cleaned.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            cleaned = "\n".join(lines).strip()
+
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            # Try to extract JSON from within the text
+            start = cleaned.find("{")
+            end = cleaned.rfind("}") + 1
+            if start >= 0 and end > start:
+                try:
+                    parsed = json.loads(cleaned[start:end])
+                except json.JSONDecodeError:
+                    log.warning("Failed to parse Claude reconciliation JSON for mandi %s", mandi_id)
+                    return None
+            else:
+                log.warning("No JSON found in Claude response for mandi %s", mandi_id)
+                return None
+
+        # Accept either {"reconciled_prices": [...]} or a bare list
+        if isinstance(parsed, dict):
+            entries = parsed.get("reconciled_prices", [])
+        elif isinstance(parsed, list):
+            entries = parsed
+        else:
+            log.warning("Unexpected JSON structure for mandi %s: %s", mandi_id, type(parsed))
+            return None
+
+        if not isinstance(entries, list):
+            return None
+
+        # Validate each entry has required fields
+        valid = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            if "commodity_id" not in entry or "reconciled_price" not in entry:
+                continue
+            try:
+                entry["reconciled_price"] = float(entry["reconciled_price"])
+                entry["confidence"] = float(entry.get("confidence", 0.5))
+                entry.setdefault("reasoning", "")
+                entry.setdefault("mandi_id", mandi_id)
+                valid.append(entry)
+            except (ValueError, TypeError):
+                continue
+
+        return valid if valid else None

@@ -29,6 +29,7 @@ export default function Forecast() {
   const { data, isLoading, isError, refetch } = usePriceForecasts()
   const [selectedCommodity, setSelectedCommodity] = useState<string | null>(null)
   const [selectedMandi, setSelectedMandi] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table')
 
   const forecasts = data?.price_forecasts ?? []
 
@@ -177,6 +178,37 @@ export default function Forecast() {
     return combined.sort((a, b) => a.day - b.day)
   }, [selectedForecast])
 
+  // ── 30-day sell calendar data ────────────────────────────────────────────
+  const calendarDays = useMemo(() => {
+    if (viewMode !== 'calendar' || !selectedForecast) return []
+    const current = selectedForecast.current_price_rs
+    const p7 = selectedForecast.price_7d
+    const p14 = selectedForecast.price_14d
+    const p30 = selectedForecast.price_30d
+
+    // Interpolate price for each of 30 days using the 3 forecast points
+    function interpolatePrice(day: number): number {
+      if (day <= 0) return current
+      if (day <= 7) return current + (p7 - current) * (day / 7)
+      if (day <= 14) return p7 + (p14 - p7) * ((day - 7) / 7)
+      return p14 + (p30 - p14) * ((day - 14) / 16)
+    }
+
+    const days: Array<{ day: number; price: number; direction: 'sell' | 'wait' | 'flat' }> = []
+    for (let d = 1; d <= 30; d++) {
+      const todayPrice = interpolatePrice(d)
+      const tomorrowPrice = interpolatePrice(Math.min(d + 1, 30))
+      const diff = tomorrowPrice - todayPrice
+      const pctDiff = todayPrice > 0 ? Math.abs(diff / todayPrice) : 0
+      let direction: 'sell' | 'wait' | 'flat' = 'flat'
+      if (pctDiff < 0.002) direction = 'flat'
+      else if (diff < 0) direction = 'sell' // price declining after this point = good to sell
+      else direction = 'wait' // price still rising = wait
+      days.push({ day: d, price: Math.round(todayPrice), direction })
+    }
+    return days
+  }, [selectedForecast])
+
   // ── Loading / Error ─────────────────────────────────────────────────────
   if (isLoading) return <TableSkeleton />
   if (isError) return <ErrorState onRetry={() => refetch()} />
@@ -251,7 +283,34 @@ export default function Forecast() {
         </div>
       </div>
 
+      {/* ── View toggle ───────────────────────────────────────────────── */}
+      <div className="mb-4 flex items-center gap-2">
+        <button
+          className={`px-3 py-1.5 text-xs font-sans font-semibold rounded-lg border transition-colors ${
+            viewMode === 'table'
+              ? 'text-white border-transparent'
+              : 'bg-white text-warm-muted border-warm-border hover:border-slate-300'
+          }`}
+          style={viewMode === 'table' ? { background: '#0d7377' } : undefined}
+          onClick={() => setViewMode('table')}
+        >
+          Table
+        </button>
+        <button
+          className={`px-3 py-1.5 text-xs font-sans font-semibold rounded-lg border transition-colors ${
+            viewMode === 'calendar'
+              ? 'text-white border-transparent'
+              : 'bg-white text-warm-muted border-warm-border hover:border-slate-300'
+          }`}
+          style={viewMode === 'calendar' ? { background: '#0d7377' } : undefined}
+          onClick={() => setViewMode('calendar')}
+        >
+          Calendar
+        </button>
+      </div>
+
       {/* ── Forecast table for selected commodity ──────────────────────── */}
+      {viewMode === 'table' && (
       <div className="mb-8">
         <div className="section-header">{activeCommodityName} \u2014 All Mandis</div>
         <div className="table-container">
@@ -271,7 +330,7 @@ export default function Forecast() {
               {filteredForecasts.map((f) => (
                 <tr
                   key={`${f.mandi_id}-${f.commodity_id}`}
-                  className={activeMandi === f.mandi_id ? '!bg-amber-50/50' : ''}
+                  className={activeMandi === f.mandi_id ? '!bg-teal-50/50' : ''}
                   style={{ cursor: 'pointer' }}
                   onClick={() => setSelectedMandi(f.mandi_id)}
                 >
@@ -304,7 +363,7 @@ export default function Forecast() {
                           className="h-full rounded-full"
                           style={{
                             width: `${Math.round(f.confidence * 100)}%`,
-                            backgroundColor: f.confidence >= 0.7 ? '#2a9d8f' : f.confidence >= 0.4 ? '#d4a019' : '#e63946',
+                            backgroundColor: f.confidence >= 0.7 ? '#2a9d8f' : f.confidence >= 0.4 ? '#0d7377' : '#e63946',
                           }}
                         />
                       </div>
@@ -317,6 +376,70 @@ export default function Forecast() {
           </table>
         </div>
       </div>
+      )}
+
+      {/* ── 30-Day Sell Calendar ───────────────────────────────────────── */}
+      {viewMode === 'calendar' && selectedForecast && calendarDays.length > 0 && (
+        <div className="mb-8">
+          <div className="section-header">
+            30-Day Sell Window {'\u2014'} {activeCommodityName} at {selectedForecast.mandi_name}
+          </div>
+          <div className="card card-body">
+            <p className="text-xs text-warm-muted mb-4 m-0">
+              Green = good days to sell. Red = prices still climbing {'\u2014'} wait.
+            </p>
+            {/* Day headers */}
+            <div className="grid grid-cols-5 gap-1.5 mb-1.5">
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d) => (
+                <div key={d} className="text-center text-[10px] font-sans font-semibold text-warm-muted uppercase tracking-wider py-1">
+                  {d}
+                </div>
+              ))}
+            </div>
+            {/* Calendar grid: 6 rows x 5 cols = 30 trading days */}
+            <div className="grid grid-cols-5 gap-1.5">
+              {calendarDays.map((d) => {
+                const bgColor = d.direction === 'sell' ? '#2a9d8f' : d.direction === 'wait' ? '#e63946' : '#94a3b8'
+                const arrow = d.direction === 'sell' ? '\u2193' : d.direction === 'wait' ? '\u2191' : '\u2192'
+                return (
+                  <div
+                    key={d.day}
+                    className="rounded-lg p-2 text-center text-white text-xs font-sans"
+                    style={{ background: bgColor }}
+                    title={`Day ${d.day}: ${formatRs(d.price)} ${'\u2014'} ${d.direction === 'sell' ? 'Good to sell' : d.direction === 'wait' ? 'Prices rising, wait' : 'Flat'}`}
+                  >
+                    <div className="font-bold text-sm">{d.day}</div>
+                    <div className="text-base leading-none mt-0.5">{arrow}</div>
+                    <div className="text-[10px] opacity-80 mt-0.5">{formatRs(d.price)}</div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Legend */}
+            <div className="flex items-center gap-4 mt-4 pt-3 border-t border-warm-border/40">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#2a9d8f' }} />
+                <span className="text-[11px] text-warm-body font-sans">Sell (price declining after)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#e63946' }} />
+                <span className="text-[11px] text-warm-body font-sans">Wait (price still rising)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#94a3b8' }} />
+                <span className="text-[11px] text-warm-body font-sans">Flat</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {viewMode === 'calendar' && !selectedForecast && (
+        <div className="mb-8 card card-body text-center py-10">
+          <p className="text-sm text-warm-muted m-0">
+            Select a commodity and mandi to see the 30-day sell calendar.
+          </p>
+        </div>
+      )}
 
       {/* ── Forecast chart ──────────────────────────────────────────────── */}
       {selectedForecast && chartData.length > 0 && (
@@ -337,7 +460,7 @@ export default function Forecast() {
                   />
                   <YAxis
                     tick={{ fontSize: 11, fill: '#888' }}
-                    tickFormatter={(v: number) => `\u20b9${v.toLocaleString('en-IN')}`}
+                    tickFormatter={(v: number) => formatRs(v)}
                     width={80}
                   />
                   <Tooltip
@@ -357,7 +480,7 @@ export default function Forecast() {
                   <Area
                     dataKey="ci_upper"
                     stroke="none"
-                    fill="#d4a019"
+                    fill="#0d7377"
                     fillOpacity={0.1}
                     connectNulls={false}
                   />
@@ -390,9 +513,9 @@ export default function Forecast() {
                   {/* Forecast line */}
                   <Line
                     dataKey="forecast"
-                    stroke="#d4a019"
+                    stroke="#0d7377"
                     strokeWidth={2.5}
-                    dot={{ fill: '#d4a019', r: 4 }}
+                    dot={{ fill: '#0d7377', r: 4 }}
                     connectNulls={false}
                     name="forecast"
                   />
@@ -406,7 +529,7 @@ export default function Forecast() {
                 Historical
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-4 border-t-2" style={{ borderColor: '#d4a019' }} />
+                <div className="w-4 border-t-2" style={{ borderColor: '#0d7377' }} />
                 Forecast
               </div>
               <div className="flex items-center gap-1.5">
@@ -414,7 +537,7 @@ export default function Forecast() {
                 Seasonal avg
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-4 h-3 rounded-sm" style={{ background: 'rgba(212,160,25,0.1)' }} />
+                <div className="w-4 h-3 rounded-sm" style={{ background: 'rgba(13,115,119,0.1)' }} />
                 Confidence band
               </div>
             </div>

@@ -14,7 +14,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-from config import COMMODITY_MAP, MANDI_MAP, SAMPLE_FARMERS, FarmerPersona
+from config import COMMODITY_MAP, MANDI_MAP, SAMPLE_FARMERS, FarmerPersona, POST_HARVEST_LOSS
+from src.geo import haversine_km
 
 log = logging.getLogger(__name__)
 
@@ -124,6 +125,13 @@ SYSTEM_PROMPT = (
     "Be direct and practical. Farmers need concrete guidance, not caveats."
 )
 
+TRANSLATION_PROMPT = (
+    "Translate the following agricultural sell recommendation into Tamil. "
+    "Keep all numbers, mandi names, and Rs amounts as-is. Use simple, "
+    "conversational Tamil that a rural farmer would understand. "
+    "Do not add any preamble -- just output the Tamil text.\n\n"
+)
+
 
 # ── Tool execution (local logic) ────────────────────────────────────────
 
@@ -216,11 +224,60 @@ def _tool_sell_options(inp: dict, sell_recommendations: dict | None) -> dict:
 
 
 def _tool_weather_outlook(inp: dict, climate_data: dict | None) -> dict:
-    """Get weather outlook (simplified demo data)."""
+    """Get weather outlook for a location.
+
+    If real climate_data is available from the pipeline, summarize the most
+    recent readings.  Otherwise return reasonable demo defaults.
+    """
     lat = inp.get("latitude", 10.78)
     lon = inp.get("longitude", 79.14)
 
-    # In production, this would fetch from NASA POWER or IMD
+    # Try to extract a meaningful summary from pipeline climate data
+    if climate_data:
+        # climate_data is mandi_id -> list[dict]; find the nearest mandi
+        best_readings: list[dict] = []
+        best_dist = float("inf")
+        for mid, readings in climate_data.items():
+            mandi = MANDI_MAP.get(mid)
+            if mandi:
+                dist = haversine_km(lat, lon, mandi.latitude, mandi.longitude)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_readings = readings
+
+        if best_readings:
+            recent = best_readings[-7:] if len(best_readings) >= 7 else best_readings
+            avg_temp = sum(r.get("temp_mean_c", 28) or 28 for r in recent) / max(1, len(recent))
+            total_rain = sum(r.get("precip_mm", 0) or 0 for r in recent)
+            avg_humidity = sum(r.get("humidity_pct", 60) or 60 for r in recent) / max(1, len(recent))
+            rainy_days = sum(1 for r in recent if (r.get("precip_mm", 0) or 0) > 2.0)
+
+            if total_rain > 50:
+                summary = f"Heavy rain last 7 days ({total_rain:.0f}mm). Drying conditions poor. Prioritize immediate sale if no covered storage."
+                drying = "poor"
+                transport_note = "Roads may be waterlogged. Factor in delays."
+            elif total_rain > 15:
+                summary = f"Moderate rainfall ({total_rain:.0f}mm over 7 days). {rainy_days} rainy days. Drying possible on clear days."
+                drying = "moderate"
+                transport_note = "Roads passable. Avoid transport on rainy days."
+            else:
+                summary = f"Mostly dry conditions ({total_rain:.0f}mm). Good for drying and transport."
+                drying = "good"
+                transport_note = "Roads clear. Good transport window."
+
+            return {
+                "location": f"{lat:.2f}, {lon:.2f}",
+                "forecast_days": len(recent),
+                "summary": summary,
+                "rain_total_mm": round(total_rain, 1),
+                "rainy_days": rainy_days,
+                "avg_temperature_c": round(avg_temp, 1),
+                "avg_humidity_pct": round(avg_humidity, 1),
+                "drying_conditions": drying,
+                "transport_advisory": transport_note,
+            }
+
+    # Fallback demo data
     return {
         "location": f"{lat:.2f}, {lon:.2f}",
         "forecast_days": 7,
@@ -238,7 +295,6 @@ def _tool_storage_analysis(inp: dict) -> dict:
     current_price = inp.get("current_price_rs", 0)
     quantity = inp.get("quantity_quintals", 1)
 
-    from config import POST_HARVEST_LOSS
     loss = POST_HARVEST_LOSS.get(commodity_id, {})
     monthly_loss_pct = loss.get("storage_per_month", 2.5)
 
@@ -266,10 +322,10 @@ def _tool_storage_analysis(inp: dict) -> dict:
 class RecommendationAgent:
     """Claude-powered recommendation agent with RAG support.
 
-    Falls back to template-based recommendations when Claude is unavailable.
+    Falls back to RuleBasedRecommender when Claude is unavailable.
     """
 
-    MAX_ROUNDS = 6
+    MAX_ROUNDS = 4
 
     def __init__(self, model: str = "claude-sonnet-4-20250514"):
         self.model = model
@@ -281,14 +337,14 @@ class RecommendationAgent:
             return self._client
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            log.warning("ANTHROPIC_API_KEY not set -- using template fallback")
+            log.warning("ANTHROPIC_API_KEY not set -- using rule-based fallback")
             return None
         try:
             import anthropic
             self._client = anthropic.Anthropic(api_key=api_key)
             return self._client
         except ImportError:
-            log.warning("anthropic package not installed -- using template fallback")
+            log.warning("anthropic package not installed -- using rule-based fallback")
             return None
 
     def recommend(
@@ -306,7 +362,8 @@ class RecommendationAgent:
                 client, farmer, reconciled_prices, forecasted_prices,
                 sell_recommendation, climate_data,
             )
-        return self._template_recommend(
+        fallback = RuleBasedRecommender()
+        return fallback.recommend(
             farmer, reconciled_prices, forecasted_prices,
             sell_recommendation, climate_data,
         )
@@ -320,20 +377,36 @@ class RecommendationAgent:
         sell_recommendation: dict,
         climate_data: dict | None,
     ) -> FarmerRecommendation:
-        """Generate recommendation via Claude tool-use loop."""
-        total_tokens = 0
-        reasoning_trace = []
+        """Generate recommendation via Claude multi-round tool-use loop.
 
+        1. Claude calls tools to gather data (up to MAX_ROUNDS).
+        2. Claude produces a final English recommendation.
+        3. A second Claude call translates to Tamil.
+        """
+        total_tokens = 0
+        reasoning_trace: list[dict] = []
+        tool_results_cache: dict[str, Any] = {}  # tool_name -> last result
+
+        # Build the initial user message
         parts = [
             f"Generate a sell recommendation for farmer {farmer.name} in {farmer.location_name}.",
             f"Commodity: {farmer.primary_commodity}, Quantity: {farmer.quantity_quintals} quintals.",
+            f"Farmer ID: {farmer.farmer_id}.",
+            f"Location: lat={farmer.latitude}, lon={farmer.longitude}.",
             f"Has storage: {farmer.has_storage}.",
             f"Notes: {farmer.notes}",
-            "\nUse the tools to gather market data, forecasts, and weather, then generate "
-            "a specific, actionable recommendation in English. Include all numbers.",
+            "",
+            "Use the available tools to gather market prices, forecasts, sell options, "
+            "weather outlook, and storage analysis. Then generate a specific, actionable "
+            "recommendation in English. Include all numbers (prices, distances, costs, "
+            "net amounts). Structure your recommendation with clear WHERE, WHEN, HOW MUCH, "
+            "and RISK sections.",
         ]
 
         messages: list[dict] = [{"role": "user", "content": "\n".join(parts)}]
+
+        # ── Multi-round tool loop ──────────────────────────────────────
+        recommendation_text = ""
 
         for round_num in range(self.MAX_ROUNDS):
             try:
@@ -346,28 +419,36 @@ class RecommendationAgent:
                 )
             except Exception as e:
                 log.error("Claude API error on round %d: %s", round_num, e)
-                return self._template_recommend(
+                fallback = RuleBasedRecommender()
+                return fallback.recommend(
                     farmer, reconciled_prices, forecasted_prices,
                     sell_recommendation, climate_data,
                 )
 
+            # Track token usage
             if hasattr(response, "usage"):
                 total_tokens += getattr(response.usage, "input_tokens", 0)
                 total_tokens += getattr(response.usage, "output_tokens", 0)
 
+            # Parse response content blocks
             tool_calls = []
-            recommendation_text = ""
+            text_parts = []
             for block in response.content:
                 if block.type == "text":
-                    recommendation_text += block.text
+                    text_parts.append(block.text)
                 elif block.type == "tool_use":
                     tool_calls.append(block)
 
+            recommendation_text = "\n".join(text_parts)
+
+            # If Claude is done (end_turn) or no tool calls, break
             if response.stop_reason == "end_turn" or not tool_calls:
                 break
 
+            # Append the assistant message (with tool_use blocks)
             messages.append({"role": "assistant", "content": response.content})
 
+            # Execute tool calls and build tool_result message
             tool_results = []
             for tc in tool_calls:
                 tool_result = _execute_tool(
@@ -377,11 +458,17 @@ class RecommendationAgent:
                     sell_recommendations={farmer.farmer_id: sell_recommendation},
                     climate_data=climate_data,
                 )
+
+                # Cache tool results for field extraction
+                tool_results_cache[tc.name] = tool_result
+
                 reasoning_trace.append({
+                    "round": round_num + 1,
                     "tool": tc.name,
                     "input": tc.input,
-                    "result_summary": str(tool_result)[:200],
+                    "result_summary": _summarize_tool_result(tc.name, tool_result),
                 })
+
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": tc.id,
@@ -390,78 +477,328 @@ class RecommendationAgent:
 
             messages.append({"role": "user", "content": tool_results})
 
+        # ── Tamil translation ──────────────────────────────────────────
+        recommendation_ta = ""
+        if recommendation_text:
+            try:
+                translation_response = client.messages.create(
+                    model=self.model,
+                    max_tokens=2048,
+                    messages=[{
+                        "role": "user",
+                        "content": TRANSLATION_PROMPT + recommendation_text,
+                    }],
+                )
+                if hasattr(translation_response, "usage"):
+                    total_tokens += getattr(translation_response.usage, "input_tokens", 0)
+                    total_tokens += getattr(translation_response.usage, "output_tokens", 0)
+
+                for block in translation_response.content:
+                    if block.type == "text":
+                        recommendation_ta += block.text
+
+                reasoning_trace.append({
+                    "round": "translation",
+                    "tool": "claude_translate",
+                    "input": {"target_language": "Tamil"},
+                    "result_summary": f"Tamil translation: {len(recommendation_ta)} chars",
+                })
+            except Exception as e:
+                log.warning("Tamil translation failed: %s", e)
+                recommendation_ta = "[Tamil translation unavailable]"
+                reasoning_trace.append({
+                    "round": "translation",
+                    "tool": "claude_translate",
+                    "input": {"target_language": "Tamil"},
+                    "result_summary": f"Translation failed: {e}",
+                })
+
+        # ── Extract structured fields from tool results ────────────────
+        sell_options_summary = _extract_sell_options_summary(
+            tool_results_cache.get("get_sell_options"), sell_recommendation,
+        )
+        weather_outlook = _extract_weather_outlook(
+            tool_results_cache.get("get_weather_outlook"), farmer, climate_data,
+        )
+        storage_analysis = _extract_storage_analysis(
+            tool_results_cache.get("get_storage_analysis"),
+            farmer, sell_recommendation,
+        )
+
         return FarmerRecommendation(
             farmer_id=farmer.farmer_id,
             farmer_name=farmer.name,
             commodity_id=farmer.primary_commodity,
             recommendation_en=recommendation_text,
-            recommendation_ta="",  # Tamil translation would be a separate Claude call
-            sell_options_summary=[],
-            weather_outlook="",
-            storage_analysis="",
+            recommendation_ta=recommendation_ta,
+            sell_options_summary=sell_options_summary,
+            weather_outlook=weather_outlook,
+            storage_analysis=storage_analysis,
             reasoning_trace=reasoning_trace,
             tokens_used=total_tokens,
         )
 
-    def _template_recommend(
+
+# ── Helper: extract structured fields from tool results ────────────────
+
+def _summarize_tool_result(tool_name: str, result: dict) -> str:
+    """Create a concise summary of a tool result for the reasoning trace."""
+    if "error" in result:
+        return f"Error: {result['error']}"
+
+    if tool_name == "get_market_summary":
+        n = result.get("mandis_reporting", 0)
+        pr = result.get("price_range", {})
+        return (
+            f"{n} mandis reporting. "
+            f"Price range: Rs {pr.get('min_rs', 0):,.0f}-{pr.get('max_rs', 0):,.0f}/q"
+        )
+    elif tool_name == "get_price_forecast":
+        if isinstance(result, dict) and not result.get("note"):
+            mandis = len(result) if not any(k.startswith("price_") for k in result) else 1
+            return f"Forecasts for {mandis} mandi(s)"
+        return str(result)[:150]
+    elif tool_name == "get_sell_options":
+        best = result.get("best_option", {})
+        n = len(result.get("all_options", []))
+        return (
+            f"Best: {best.get('mandi_name', '?')} ({best.get('sell_timing', '?')}), "
+            f"net Rs {best.get('net_price_rs', 0):,.0f}/q. {n} options total."
+        )
+    elif tool_name == "get_weather_outlook":
+        return result.get("summary", str(result)[:150])
+    elif tool_name == "get_storage_analysis":
+        loss = result.get("monthly_loss_pct", 0)
+        return f"Storage loss: {loss}%/month"
+    return str(result)[:150]
+
+
+def _extract_sell_options_summary(
+    tool_result: dict | None,
+    sell_recommendation: dict,
+) -> list[dict]:
+    """Extract top sell options into a summary list."""
+    all_options = []
+
+    # Prefer tool result if Claude called get_sell_options
+    source = tool_result if tool_result and "all_options" in tool_result else sell_recommendation
+
+    for opt in source.get("all_options", [])[:5]:
+        all_options.append({
+            "mandi": opt.get("mandi_name", ""),
+            "timing": opt.get("sell_timing", ""),
+            "net_price_rs": opt.get("net_price_rs", 0),
+            "market_price_rs": opt.get("market_price_rs", 0),
+            "transport_cost_rs": opt.get("transport_cost_rs", 0),
+            "distance_km": opt.get("distance_km", 0),
+            "confidence": opt.get("confidence", 0),
+        })
+
+    return all_options
+
+
+def _extract_weather_outlook(
+    tool_result: dict | None,
+    farmer: FarmerPersona,
+    climate_data: dict | None,
+) -> str:
+    """Extract weather outlook string."""
+    if tool_result and "summary" in tool_result:
+        return tool_result["summary"]
+
+    # If Claude didn't call the weather tool, compute it ourselves
+    weather = _tool_weather_outlook(
+        {"latitude": farmer.latitude, "longitude": farmer.longitude},
+        climate_data,
+    )
+    return weather.get("summary", "Weather data unavailable.")
+
+
+def _extract_storage_analysis(
+    tool_result: dict | None,
+    farmer: FarmerPersona,
+    sell_recommendation: dict,
+) -> str:
+    """Extract storage analysis as a readable string."""
+    if tool_result and "projections" in tool_result:
+        return json.dumps(tool_result["projections"], indent=2)
+
+    # If Claude didn't call the storage tool, compute it ourselves
+    best = sell_recommendation.get("best_option", {})
+    current_price = best.get("market_price_rs", 0)
+    if current_price <= 0:
+        return "No price data for storage analysis."
+
+    storage = _tool_storage_analysis({
+        "commodity_id": farmer.primary_commodity,
+        "current_price_rs": current_price,
+        "quantity_quintals": farmer.quantity_quintals,
+    })
+    return json.dumps(storage.get("projections", []), indent=2)
+
+
+# ── Rule-Based Recommender (fallback) ──────────────────────────────────
+
+class RuleBasedRecommender:
+    """Template-based recommendation engine.
+
+    Generates structured recommendations from sell optimizer output,
+    forecast data, weather, and storage projections -- no Claude required.
+    """
+
+    def recommend(
         self,
         farmer: FarmerPersona,
         reconciled_prices: dict,
         forecasted_prices: dict,
         sell_recommendation: dict,
-        climate_data: dict | None,
+        climate_data: dict | None = None,
     ) -> FarmerRecommendation:
-        """Template-based recommendation when Claude is unavailable."""
+        """Generate a template-filled recommendation for a farmer."""
         commodity = COMMODITY_MAP.get(farmer.primary_commodity, {})
         commodity_name = commodity.get("name", farmer.primary_commodity)
 
-        # Get best option from sell recommendation
+        # ── Sell options ───────────────────────────────────────────────
         best = sell_recommendation.get("best_option", {})
         all_options = sell_recommendation.get("all_options", [])
-        rec_text = sell_recommendation.get("recommendation_text", "")
+        rec_text_from_optimizer = sell_recommendation.get("recommendation_text", "")
 
-        if not rec_text and best:
-            rec_text = (
-                f"{farmer.name}: Sell {commodity_name} at {best.get('mandi_name', 'nearest mandi')} "
-                f"({best.get('distance_km', 0):.0f} km). "
-                f"Market price: Rs {best.get('market_price_rs', 0):,.0f}/quintal. "
-                f"Net after costs: Rs {best.get('net_price_rs', 0):,.0f}/quintal."
-            )
-
-        # Weather summary
+        # ── Weather ────────────────────────────────────────────────────
         weather = _tool_weather_outlook(
-            {"latitude": farmer.latitude, "longitude": farmer.longitude}, climate_data,
+            {"latitude": farmer.latitude, "longitude": farmer.longitude},
+            climate_data,
         )
+        weather_summary = weather.get("summary", "Weather data unavailable.")
+        drying = weather.get("drying_conditions", "unknown")
 
-        # Storage analysis
+        # ── Storage analysis ───────────────────────────────────────────
         current_price = best.get("market_price_rs", 0)
         storage = _tool_storage_analysis({
             "commodity_id": farmer.primary_commodity,
             "current_price_rs": current_price,
             "quantity_quintals": farmer.quantity_quintals,
         })
+        storage_projections = storage.get("projections", [])
+        monthly_loss_pct = storage.get("monthly_loss_pct", 0)
 
-        # Sell options summary
+        # ── Build recommendation text ──────────────────────────────────
+        sections = []
+
+        # WHERE section
+        if best.get("mandi_name"):
+            sections.append(
+                f"WHERE: Sell at {best['mandi_name']} "
+                f"({best.get('distance_km', 0):.0f} km away, "
+                f"~{best.get('distance_km', 0) / 30 * 60:.0f} min drive). "
+                f"Transport cost: Rs {best.get('transport_cost_rs', 0):,.0f}/quintal."
+            )
+
+        # WHEN section
+        timing = best.get("sell_timing", "now")
+        if timing == "now":
+            sections.append(
+                f"WHEN: Sell NOW. Current market price at {best.get('mandi_name', 'best mandi')}: "
+                f"Rs {best.get('market_price_rs', 0):,.0f}/quintal."
+            )
+        else:
+            sections.append(
+                f"WHEN: WAIT {timing}. Forecasted price at {best.get('mandi_name', 'best mandi')}: "
+                f"Rs {best.get('market_price_rs', 0):,.0f}/quintal. "
+                f"Storage loss while waiting: Rs {best.get('storage_loss_rs', 0):,.0f}/quintal."
+            )
+
+        # HOW MUCH section
+        net_total = best.get("net_price_rs", 0) * farmer.quantity_quintals
+        sections.append(
+            f"HOW MUCH: Net price after all costs: Rs {best.get('net_price_rs', 0):,.0f}/quintal. "
+            f"For {farmer.quantity_quintals:.0f} quintals of {commodity_name}: "
+            f"Rs {net_total:,.0f} total."
+        )
+
+        # RISK section
+        risk_parts = []
+        if drying == "poor":
+            risk_parts.append(
+                f"Weather: {weather_summary} Consider immediate sale."
+            )
+        elif drying == "moderate":
+            risk_parts.append(f"Weather: {weather_summary}")
+
+        if monthly_loss_pct >= 5.0:
+            risk_parts.append(
+                f"Storage: High spoilage rate ({monthly_loss_pct}%/month). "
+                f"Do not delay sale."
+            )
+        elif monthly_loss_pct >= 2.5:
+            risk_parts.append(
+                f"Storage: Moderate loss rate ({monthly_loss_pct}%/month). "
+                f"Waiting beyond 14 days carries significant cost."
+            )
+
+        if not farmer.has_storage:
+            risk_parts.append(
+                "No storage available. Must sell within days of harvest."
+            )
+
+        if best.get("confidence", 1.0) < 0.6:
+            risk_parts.append(
+                "Price forecast confidence is low. Monitor daily and adjust."
+            )
+
+        if risk_parts:
+            sections.append("RISKS: " + " ".join(risk_parts))
+
+        # Potential gain comparison
+        potential_gain = sell_recommendation.get("potential_gain_rs", 0)
+        if potential_gain > 0:
+            sections.append(
+                f"GAIN: By following this plan instead of selling at the nearest mandi now, "
+                f"you gain Rs {potential_gain:,.0f} on {farmer.quantity_quintals:.0f} quintals."
+            )
+
+        recommendation_en = "\n\n".join(sections)
+
+        # If we have the optimizer's text and our template is empty, use it
+        if not recommendation_en.strip() and rec_text_from_optimizer:
+            recommendation_en = rec_text_from_optimizer
+
+        # ── Sell options summary ───────────────────────────────────────
         options_summary = []
         for opt in all_options[:5]:
             options_summary.append({
                 "mandi": opt.get("mandi_name", ""),
                 "timing": opt.get("sell_timing", ""),
                 "net_price_rs": opt.get("net_price_rs", 0),
+                "market_price_rs": opt.get("market_price_rs", 0),
+                "transport_cost_rs": opt.get("transport_cost_rs", 0),
                 "distance_km": opt.get("distance_km", 0),
+                "confidence": opt.get("confidence", 0),
             })
+
+        # ── Reasoning trace ────────────────────────────────────────────
+        reasoning_trace = [
+            {
+                "round": 1,
+                "tool": "rule_based_fallback",
+                "input": {"farmer_id": farmer.farmer_id, "commodity_id": farmer.primary_commodity},
+                "result_summary": (
+                    f"Generated template recommendation. "
+                    f"Best option: {best.get('mandi_name', 'N/A')} ({timing}), "
+                    f"net Rs {best.get('net_price_rs', 0):,.0f}/q. "
+                    f"Claude unavailable -- used rule-based engine."
+                ),
+            },
+        ]
 
         return FarmerRecommendation(
             farmer_id=farmer.farmer_id,
             farmer_name=farmer.name,
             commodity_id=farmer.primary_commodity,
-            recommendation_en=rec_text,
-            recommendation_ta="",  # Tamil translation placeholder
+            recommendation_en=recommendation_en,
+            recommendation_ta="[Tamil translation pending]",
             sell_options_summary=options_summary,
-            weather_outlook=weather.get("summary", ""),
-            storage_analysis=json.dumps(storage.get("projections", []), indent=2),
-            reasoning_trace=[
-                {"tool": "template_fallback", "note": "Claude unavailable, used template."},
-            ],
+            weather_outlook=weather_summary,
+            storage_analysis=json.dumps(storage_projections, indent=2),
+            reasoning_trace=reasoning_trace,
             tokens_used=0,
         )

@@ -343,6 +343,10 @@ def _tool_flag_anomalies(inp: dict) -> dict:
 
 # ── Commodity matching ───────────────────────────────────────────────────
 
+# Pre-sorted alias keys (longest first) — avoids re-sorting on every call
+_SORTED_ALIASES = sorted(COMMODITY_ALIASES.keys(), key=len, reverse=True)
+
+
 def _match_commodity(raw_name: str) -> str | None:
     """Match a raw commodity name to canonical ID."""
     if not raw_name:
@@ -355,8 +359,7 @@ def _match_commodity(raw_name: str) -> str | None:
         return COMMODITY_ALIASES[name_lower]
 
     # Substring match (longest alias first)
-    sorted_aliases = sorted(COMMODITY_ALIASES.keys(), key=len, reverse=True)
-    for alias in sorted_aliases:
+    for alias in _SORTED_ALIASES:
         if alias in name_lower:
             return COMMODITY_ALIASES[alias]
 
@@ -446,30 +449,40 @@ class RuleBasedExtractor:
 
     @classmethod
     def _detect_anomalies(cls, result: ExtractionResult):
-        """Flag prices >3 sigma from rolling mean."""
+        """Flag prices >3 sigma from 30-day rolling mean."""
         from collections import defaultdict
         by_commodity: dict[str, list[dict]] = defaultdict(list)
 
         for p in result.normalized_prices:
             by_commodity[p["commodity_id"]].append(p)
 
+        window = 30
         for commodity_id, prices in by_commodity.items():
             sorted_prices = sorted(prices, key=lambda x: x.get("date", ""))
             modal_prices = [p["modal_price_rs"] for p in sorted_prices]
 
+            # Need at least 10 data points before we can start detecting
             if len(modal_prices) < 10:
                 continue
 
-            mean = sum(modal_prices) / len(modal_prices)
-            variance = sum((p - mean) ** 2 for p in modal_prices) / len(modal_prices)
-            std = math.sqrt(variance) if variance > 0 else 1
+            for i in range(len(sorted_prices)):
+                # Build the rolling window from preceding entries
+                window_start = max(0, i - window)
+                window_vals = modal_prices[window_start:i]
 
-            for i, p in enumerate(sorted_prices):
-                z_score = (p["modal_price_rs"] - mean) / std
+                # Need sufficient history to compute meaningful stats
+                if len(window_vals) < 10:
+                    continue
+
+                mean = sum(window_vals) / len(window_vals)
+                variance = sum((v - mean) ** 2 for v in window_vals) / len(window_vals)
+                std = math.sqrt(variance) if variance > 0 else 1
+
+                z_score = (modal_prices[i] - mean) / std
                 if abs(z_score) > 3:
-                    p["quality_flag"] = "anomalous"
+                    sorted_prices[i]["quality_flag"] = "anomalous"
                     result.anomalies.append({
-                        **p,
+                        **sorted_prices[i],
                         "z_score": round(z_score, 2),
                         "rolling_mean": round(mean, 0),
                     })
@@ -534,6 +547,12 @@ class ExtractionAgent:
         tools_used: list[str] = []
         total_tokens = 0
 
+        # Collect tool results across rounds for post-loop aggregation
+        collected_normalized: list[dict] = []
+        collected_stale: list[dict] = []
+        collected_anomalies: list[dict] = []
+        collected_mappings: dict[str, str] = {}
+
         mandi = MANDI_MAP.get(mandi_id)
         parts = [f"Extract and normalize price data for mandi {mandi_id}"]
         if mandi:
@@ -550,8 +569,12 @@ class ExtractionAgent:
                 parts.append(json.dumps(rec, default=str))
 
         parts.append(
-            "\nUse the available tools to normalize commodity names, detect stale data, "
-            "and flag anomalies. Return normalized prices in JSON."
+            "\nUse the available tools to:\n"
+            "1. Call normalize_commodity for each unique commodity name\n"
+            "2. Call parse_agmarknet_entry / parse_enam_listing for each record\n"
+            "3. Call detect_stale_data for each mandi/commodity price series\n"
+            "4. Call flag_anomalies for each mandi/commodity price series\n"
+            "Return normalized prices in JSON."
         )
 
         messages: list[dict] = [{"role": "user", "content": "\n".join(parts)}]
@@ -593,11 +616,135 @@ class ExtractionAgent:
                     "content": json.dumps(tool_result),
                 })
 
+                # Accumulate structured data from each tool's output
+                self._accumulate_tool_result(
+                    tc.name, tc.input, tool_result, mandi_id,
+                    collected_normalized, collected_stale,
+                    collected_anomalies, collected_mappings,
+                )
+
             messages.append({"role": "user", "content": tool_results})
 
+        # If Claude called parse tools, use accumulated results directly.
+        # If Claude only called normalize/detect/flag tools but not parse,
+        # build normalized prices from raw records + commodity mappings.
+        if collected_normalized:
+            result.normalized_prices = collected_normalized
+        else:
+            # Claude may have only used normalize_commodity + detect/flag.
+            # Build normalized prices from raw input using the mappings Claude found.
+            all_records = (agmarknet_records or []) + (enam_records or [])
+            for rec in all_records:
+                raw_name = rec.get("commodity_name", rec.get("commodity_id", ""))
+                commodity_id = rec.get("commodity_id")
+                # Try Claude's mappings first, then our local matcher
+                if commodity_id not in COMMODITY_MAP:
+                    commodity_id = collected_mappings.get(raw_name) or _match_commodity(raw_name)
+                if commodity_id is None:
+                    continue
+                result.normalized_prices.append({
+                    "mandi_id": mandi_id,
+                    "commodity_id": commodity_id,
+                    "date": rec.get("date"),
+                    "min_price_rs": rec.get("min_price_rs", 0),
+                    "max_price_rs": rec.get("max_price_rs", 0),
+                    "modal_price_rs": rec.get("modal_price_rs", 0),
+                    "arrivals_tonnes": rec.get("arrivals_tonnes", 0),
+                    "source": rec.get("source", "unknown"),
+                    "quality_flag": rec.get("quality_flag", "good"),
+                })
+
+        result.stale_entries = collected_stale
+        result.anomalies = collected_anomalies
+        result.commodity_mappings = collected_mappings
         result.tokens_used = total_tokens
         result.confidence = 0.85 if result.normalized_prices else 0.5
         return result
+
+    @staticmethod
+    def _accumulate_tool_result(
+        tool_name: str,
+        tool_input: dict,
+        tool_result: dict,
+        mandi_id: str,
+        collected_normalized: list[dict],
+        collected_stale: list[dict],
+        collected_anomalies: list[dict],
+        collected_mappings: dict[str, str],
+    ):
+        """Parse a single tool call result into the appropriate collection."""
+        if tool_name == "parse_agmarknet_entry":
+            cid = tool_result.get("commodity_id")
+            if cid and tool_result.get("valid"):
+                collected_normalized.append({
+                    "mandi_id": mandi_id,
+                    "commodity_id": cid,
+                    "date": tool_input.get("date_str"),
+                    "min_price_rs": 0,
+                    "max_price_rs": 0,
+                    "modal_price_rs": tool_result.get("price_rs_per_quintal", 0),
+                    "arrivals_tonnes": 0,
+                    "source": "agmarknet",
+                    "quality_flag": "good",
+                })
+                raw = tool_input.get("raw_commodity_name", "")
+                if raw:
+                    collected_mappings[raw] = cid
+
+        elif tool_name == "parse_enam_listing":
+            cid = tool_result.get("commodity_id")
+            if cid and tool_result.get("valid"):
+                collected_normalized.append({
+                    "mandi_id": mandi_id,
+                    "commodity_id": cid,
+                    "date": tool_input.get("trade_date"),
+                    "min_price_rs": 0,
+                    "max_price_rs": 0,
+                    "modal_price_rs": tool_result.get("price_rs_per_quintal", 0),
+                    "arrivals_tonnes": 0,
+                    "source": "enam",
+                    "quality_flag": "good",
+                })
+                raw = tool_input.get("raw_commodity_name", "")
+                if raw:
+                    collected_mappings[raw] = cid
+
+        elif tool_name == "normalize_commodity":
+            cid = tool_result.get("commodity_id")
+            raw = tool_result.get("raw_name", "")
+            if cid and raw:
+                collected_mappings[raw] = cid
+
+        elif tool_name == "detect_stale_data":
+            stale_entries = tool_result.get("stale_entries", [])
+            cid = tool_input.get("commodity_id", "unknown")
+            mid = tool_input.get("mandi_id", mandi_id)
+            for entry in stale_entries:
+                collected_stale.append({
+                    "mandi_id": mid,
+                    "commodity_id": cid,
+                    "start_date": entry.get("start_date"),
+                    "end_date": entry.get("end_date"),
+                    "consecutive_days": entry.get("consecutive_days"),
+                    "price": entry.get("price"),
+                    "quality_flag": "stale",
+                })
+
+        elif tool_name == "flag_anomalies":
+            anomalies = tool_result.get("anomalies", [])
+            cid = tool_input.get("commodity_id", "unknown")
+            mid = tool_input.get("mandi_id", mandi_id)
+            for entry in anomalies:
+                collected_anomalies.append({
+                    "mandi_id": mid,
+                    "commodity_id": cid,
+                    "date": entry.get("date"),
+                    "price": entry.get("price"),
+                    "z_score": entry.get("z_score"),
+                    "rolling_mean": entry.get("rolling_mean"),
+                    "rolling_std": entry.get("rolling_std"),
+                    "quality_flag": "anomalous",
+                })
 
     def _rule_based_extract(
         self,

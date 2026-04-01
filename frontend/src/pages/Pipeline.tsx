@@ -35,11 +35,12 @@ const PIPELINE_STEPS = [
   },
   {
     num: 4, name: 'Forecast', table: 'price_forecasts', color: '#E65100',
-    desc: 'Predicts price movements for 7, 14, and 30 days using 15 features: seasonality, weather, arrival volumes, transport costs, and historical patterns',
+    desc: 'Chronos-2 foundation model generates probabilistic forecasts with native confidence intervals. XGBoost MOS corrects for local mandi bias using 15 features: seasonality, weather, arrival volumes, transport costs, and historical patterns',
     options: [
-      { label: 'XGBoost Model', note: 'Gradient-boosted trees trained on 3 years of Tamil Nadu price data', active: true },
+      { label: 'Chronos-2', note: 'Amazon foundation model for zero-shot probabilistic time-series forecasting', active: true },
+      { label: 'XGBoost MOS', note: 'Model Output Statistics: bias-corrects Chronos predictions using local mandi features', active: true },
       { label: 'Seasonal Patterns', note: 'Harvest cycles, festival demand, monsoon effects', active: true },
-      { label: 'Confidence Intervals', note: 'Probabilistic bounds on price predictions', active: true },
+      { label: 'Confidence Intervals', note: 'Probabilistic bounds from Chronos quantile predictions', active: true },
     ],
   },
   {
@@ -51,7 +52,7 @@ const PIPELINE_STEPS = [
     ],
   },
   {
-    num: 6, name: 'Recommend', table: 'recommendations', color: '#d4a019',
+    num: 6, name: 'Recommend', table: 'recommendations', color: '#0d7377',
     desc: 'Generates personalized sell advice for each farmer in English and Tamil, explaining which mandi, when to sell, and why \u2014 backed by a full cost breakdown',
     options: [
       { label: 'AI-Generated Advice', note: 'Natural language recommendations with reasoning', active: true },
@@ -251,8 +252,8 @@ export default function Pipeline() {
               </div>
               <div className="card card-body">
                 <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider m-0 mb-1">Forecasting</p>
-                <p className="text-sm font-bold text-[#1a1a1a] m-0">XGBoost + 15 Features</p>
-                <p className="text-xs text-warm-body m-0 mt-1">Gradient-boosted trees trained on 3 years of price data with seasonal and weather features.</p>
+                <p className="text-sm font-bold text-[#1a1a1a] m-0">Chronos-2 + XGBoost MOS</p>
+                <p className="text-xs text-warm-body m-0 mt-1">Foundation model forecasts with local bias correction via 15 mandi-level features.</p>
               </div>
               <div className="card card-body">
                 <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider m-0 mb-1">AI Agents</p>
@@ -387,17 +388,27 @@ export default function Pipeline() {
                     className="text-xs font-sans font-semibold px-3 py-1 rounded-full"
                     style={{ backgroundColor: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}
                   >
-                    XGBoost Price Forecaster
+                    Chronos-2
+                  </span>
+                  <span className="text-xs text-warm-muted font-sans">{'\u2192'}</span>
+                  <span
+                    className="text-xs font-sans font-semibold px-3 py-1 rounded-full"
+                    style={{ backgroundColor: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}
+                  >
+                    XGBoost MOS
                   </span>
                   {modelInfo.data?.model_metrics?.features && (
                     <span
                       className="text-xs font-sans font-semibold px-3 py-1 rounded-full"
-                      style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
+                      style={{ backgroundColor: '#f0f9ff', color: '#0c4a6e', border: '1px solid #7dd3fc' }}
                     >
                       {modelInfo.data.model_metrics.features.length} Features
                     </span>
                   )}
                 </div>
+                <p className="text-xs text-warm-body mt-2 mb-0 leading-relaxed" style={{ maxWidth: 600 }}>
+                  Chronos-2 generates probabilistic forecasts with native confidence intervals. XGBoost corrects for local mandi bias.
+                </p>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <MetricCard
@@ -442,7 +453,7 @@ export default function Pipeline() {
                                 className="h-full rounded-full"
                                 style={{
                                   width: `${Math.round(importance * 100)}%`,
-                                  backgroundColor: '#d4a019',
+                                  backgroundColor: '#0d7377',
                                 }}
                               />
                             </div>

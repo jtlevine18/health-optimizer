@@ -294,6 +294,376 @@ def _generate_demo_data() -> dict:
                 "reasoning": resolution_detail,
             })
 
+    # ── Enrich conflicts with realistic investigation narratives ──
+    # Each conflict tells a different story about WHY two government databases disagreed.
+    # Keyed on (mandi_id, commodity_id) to match the deterministic RNG output above.
+    _conflict_narratives = {
+        # ── Story: Stale eNAM data ──
+        # Salem turmeric — eNAM hasn't updated since last session, Agmarknet is fresher
+        ("MND-SLM", "TUR-FIN"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet reports modal price from 31 Mar auction (Rs 10,315/q). eNAM shows last-traded price from 29 Mar (Rs 9,480/q). The 2-day lag explains Rs 835 gap — eNAM hasn't updated since Saturday's session.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Erode Turmeric Market (38km) reports Rs 10,480 on 31 Mar. Karur (55km) reports Rs 10,250. Both align with Agmarknet's Rs 10,315, not eNAM's stale Rs 9,480.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March turmeric prices typically 8-12% below annual average as rabi harvest peaks. Rs 10,315 falls within expected seasonal band. Rs 9,480 would be 18% below — unusually low even for post-harvest glut.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrival volume 185 quintals vs 7-day average 210. Normal range — no supply shock that would justify eNAM's discount.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Salem-to-Erode transport cost Rs 95/q. Price gap of Rs 835 far exceeds transport cost — if eNAM's price were real, traders would already be buying at Salem and selling at Erode.",
+                },
+            ],
+            "reasoning": "eNAM data is 2 days stale (last updated Saturday). Agmarknet's Monday auction price is corroborated by Erode and Karur. Trust Agmarknet.",
+            "resolution": "trust_agmarknet",
+            "confidence": 0.92,
+        },
+        # ── Story: Genuine regional price difference (aggregation method) ──
+        # Tiruchirappalli rice — both sources are same-day but use different aggregation
+        ("MND-TRC", "RICE-SAMBA"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Both sources report same-day data (31 Mar). Agmarknet modal price Rs 2,047/q. eNAM weighted-average price Rs 2,275/q. Different aggregation methods — modal vs weighted average of all transactions.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Thanjavur (45km) reports Rs 2,020. Kumbakonam (35km) reports Rs 2,080. Cluster average Rs 2,050 sits closer to Agmarknet but eNAM's weighted average captures some premium lots.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "Late-March Samba rice typically near seasonal low as rabi harvest arrives. Rs 2,047-2,275 range is within 5% of expected seasonal index (0.92). Both plausible.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Tiruchirappalli arrivals 420 quintals — 20% above 7-day average of 350. Harvest surge explains downward pressure on modal price while premium lots still trade higher.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Price gap (Rs 228) vs Thanjavur transport (Rs 113/q). Gap is 2x transport cost but Thanjavur at Rs 2,020 — arbitrage partially closed. Remaining gap reflects aggregation method, not a true market inefficiency.",
+                },
+            ],
+            "reasoning": "Both sources report same-day but use different methods: Agmarknet's modal price reflects the most common transaction; eNAM's weighted average includes premium lots. Weighted 60/40 toward Agmarknet.",
+            "resolution": "weighted_average",
+            "confidence": 0.78,
+        },
+        # ── Story: Seasonal anomaly — eNAM price doesn't match seasonal pattern ──
+        # Coimbatore onion — eNAM shows price that's premature for the season
+        ("MND-CBE", "ONI-RED"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet reports Rs 1,534/q (31 Mar). eNAM reports Rs 1,473/q (31 Mar). Both same-day. Gap of Rs 61 (4.0%) — modest divergence but directionally interesting: eNAM is lower.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Dindigul (65km) reports Rs 1,520. Madurai Periyar (98km) reports Rs 1,550. Regional cluster Rs 1,520-1,550 strongly supports Agmarknet's range.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March onion prices typically at seasonal low (index 0.85) before summer spike begins in April-May. Rs 1,534 matches seasonal pattern. Rs 1,473 suggests deeper-than-expected trough — possibly one distressed lot pulling down eNAM's average.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrivals 165 quintals vs 7-day avg 180. Slight decline but not enough to justify downward pressure. Rabi onion harvest is winding down normally.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Coimbatore-to-Dindigul transport Rs 163/q. eNAM discount of Rs 61 is well within transport cost — no arbitrage opportunity. Likely a small-lot distressed sale on eNAM.",
+                },
+            ],
+            "reasoning": "Regional mandis and seasonal pattern both support Agmarknet's price. eNAM's lower figure likely reflects a distressed small-lot sale, not the prevailing market rate. Trust Agmarknet.",
+            "resolution": "trust_agmarknet",
+            "confidence": 0.88,
+        },
+        # ── Story: Volume spike / outlier transaction ──
+        # Salem groundnut — eNAM higher due to a thin-volume premium lot
+        ("MND-SLM", "GNUT-POD"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet Rs 5,964/q. eNAM Rs 6,288/q. eNAM is higher by Rs 324 (5.4%). Both same-day data.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Coimbatore (85km) Rs 5,857. Erode (45km) — no groundnut trading. Karur (50km) Rs 5,900. Cluster Rs 5,857-5,900 aligns with Agmarknet, not eNAM's premium.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March groundnut typically at seasonal baseline (index 1.00) before crushing-season demand lifts April-May prices. Rs 5,964 consistent with seasonal expectation.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrivals 95 quintals — 35% BELOW 7-day average of 145. Low supply day. eNAM likely recorded a premium lot from a single large buyer bidding up a thin market.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Gap Rs 324. Karur transport Rs 125/q. Gap is 2.6x transport — if eNAM's price were prevailing, Karur traders would already be shipping groundnut to Salem. They aren't.",
+                },
+            ],
+            "reasoning": "eNAM recorded a premium lot on a thin-volume day (arrivals 35% below average). Regional mandis and seasonal norms both support Agmarknet's price. Trust Agmarknet.",
+            "resolution": "trust_agmarknet",
+            "confidence": 0.90,
+        },
+        # ── Story: Reporting lag + weekend effect ──
+        # Madurai cotton — eNAM captured Friday's closing, Agmarknet has Monday's opening
+        ("MND-MDR", "COT-MCU"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet Rs 6,897/q (Monday 31 Mar opening). eNAM Rs 7,356/q (Friday 28 Mar close). Weekend gap — eNAM hasn't synced Monday's session yet. Rs 459 spread (6.7%).",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Coimbatore (210km) reports Rs 6,880 on 31 Mar. Karur (150km) reports Rs 6,920. Monday prices across the region are Rs 6,880-6,920, consistent with Agmarknet.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "Cotton at seasonal baseline (index 1.00) in March before summer mill procurement. Rs 6,897 tracks the index. eNAM's Rs 7,356 implies a 7% premium over seasonal norm — would require a demand shock that didn't happen.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Monday arrivals 245 quintals — slightly above 7-day average of 230. Normal post-weekend restock. No supply constraint to justify eNAM's premium.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Madurai-to-Coimbatore transport Rs 525/q (long haul). But Karur at Rs 6,920 with Rs 375/q transport — the Rs 459 spread exceeds Karur-to-Madurai cost of Rs 375. If eNAM were current, arbitrage would close the gap.",
+                },
+            ],
+            "reasoning": "Classic weekend lag: eNAM shows Friday's closing price, Agmarknet reports Monday's opening. Regional mandis confirm Monday's lower level. Trust Agmarknet (fresher data).",
+            "resolution": "trust_agmarknet",
+            "confidence": 0.91,
+        },
+        # ── Story: Harvest surplus depressing modal price ──
+        # Madurai maize — Agmarknet's modal price pushed down by harvest glut
+        ("MND-MDR", "MZE-YEL"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet Rs 1,889/q. eNAM Rs 1,684/q. Unusual — eNAM is LOWER by Rs 205 (10.9%). Both report 31 Mar data.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Dindigul (65km) reports Rs 1,850. Tiruchirappalli (130km) reports Rs 1,870. Regional cluster Rs 1,850-1,870 supports Agmarknet's range.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March maize near seasonal low (index 0.88) as rabi harvest arrives. Rs 1,889 is within expected band. Rs 1,684 would be 20% below annual average — implausibly low.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrivals 310 quintals — 45% above 7-day average of 215. Harvest surge. eNAM appears to have captured distressed early-morning lots sold at discount before the auction floor stabilized.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Gap Rs 205. Dindigul transport Rs 163/q. eNAM's low price would create immediate arbitrage from Dindigul — but Dindigul traders report normal flows. eNAM's price is an outlier, not the market.",
+                },
+            ],
+            "reasoning": "eNAM captured early-morning distressed lots during harvest surge. Agmarknet's modal price reflects the stabilized auction floor, corroborated by Dindigul and Tiruchirappalli. Trust Agmarknet.",
+            "resolution": "trust_agmarknet",
+            "confidence": 0.87,
+        },
+        # ── Story: Festival demand spike in eNAM ──
+        # Madurai banana — eNAM lower but Agmarknet captures festival premium lots
+        ("MND-MDR", "BAN-ROB"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet Rs 1,666/q. eNAM Rs 1,496/q. eNAM is lower by Rs 170 (10.2%). Both same-day. Banana is perishable — price gaps close fast.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Dindigul (65km) reports Rs 1,620. Coimbatore (210km) reports Rs 1,707. Wide geographic spread: Rs 1,620-1,707. Madurai sits in the middle.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March banana at seasonal low (index 0.95). Rs 1,666 is plausible. Rs 1,496 would be 12% below average — unusually cheap for a perishable with steady demand.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrivals 380 quintals — 15% above 7-day average of 330. Good supply but banana demand is steady. eNAM likely recorded a bulk wholesale lot at discount.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Gap Rs 170. Dindigul transport Rs 163/q. Margin nearly zero — no profitable arbitrage, which means the gap is a reporting artifact, not a real market opportunity.",
+                },
+            ],
+            "reasoning": "eNAM recorded a bulk wholesale discount lot. Agmarknet's modal price better reflects retail-wholesale prevailing rate. Neighboring mandis split the difference. Weighted 65/35 toward Agmarknet.",
+            "resolution": "weighted_toward_agmarknet",
+            "confidence": 0.82,
+        },
+        # ── Story: Coimbatore groundnut — processor premium in Agmarknet ──
+        ("MND-CBE", "GNUT-POD"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet Rs 5,857/q. eNAM Rs 5,468/q. Agmarknet is higher by Rs 389 (6.6%). Both same-day. Coimbatore is a major oil-mill hub — processors bid aggressively in the auction.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Salem (85km) Rs 5,964. Dindigul (90km) Rs 5,800. Cluster Rs 5,800-5,964 — Coimbatore's Agmarknet price sits squarely in this range.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March groundnut at seasonal baseline (index 1.00). Rs 5,857 is consistent. Rs 5,468 would be 6% below baseline — possible but unusual with crushing season approaching.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrivals 210 quintals vs 7-day average 195. Slightly above normal. Oil mills actively procuring ahead of crushing season, supporting Agmarknet's higher auction price.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Gap Rs 389. Salem transport Rs 213/q. Gap is 1.8x transport — borderline. Some Salem traders are indeed shipping to Coimbatore to capture the processor premium, which should narrow the gap within days.",
+                },
+            ],
+            "reasoning": "Coimbatore oil mills bid up Agmarknet's auction price ahead of crushing season. eNAM captures older or non-processor transactions. Regional prices support Agmarknet. Trust Agmarknet.",
+            "resolution": "trust_agmarknet",
+            "confidence": 0.86,
+        },
+        # ── Story: Coimbatore cotton — quality grade mismatch ──
+        ("MND-CBE", "COT-MCU"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet Rs 6,880/q. eNAM Rs 6,300/q. Gap Rs 580 (8.4%). Both same-day. Significant — cotton prices don't usually vary this much within a single mandi.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Erode (65km) Rs 6,950. Karur (80km) Rs 6,920. Madurai Periyar (210km) Rs 6,897. All three neighbors cluster near Rs 6,900, strongly supporting Agmarknet.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March cotton at seasonal baseline (index 1.00). Rs 6,880 matches perfectly. Rs 6,300 would be 7% below — would indicate off-grade or short-staple cotton.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrivals 195 quintals vs 7-day average 200. Normal volume. No supply disruption. The gap likely reflects a grade mismatch — eNAM may be reporting a short-staple MCU-5 lot while Agmarknet reports the standard MCU-7.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Gap Rs 580. Erode transport Rs 163/q. Gap is 3.6x transport cost — if same grade, traders would flood Coimbatore. They aren't, confirming this is a grade/quality difference, not a price discrepancy.",
+                },
+            ],
+            "reasoning": "Likely a cotton grade mismatch: eNAM recorded a short-staple lot (MCU-5) while Agmarknet reports standard MCU-7. Three neighboring mandis confirm Rs 6,880-6,950 for standard grade. Trust Agmarknet for MCU-7 benchmark.",
+            "resolution": "trust_agmarknet",
+            "confidence": 0.85,
+        },
+        # ── Story: Coimbatore banana — cold chain disruption premium ──
+        ("MND-CBE", "BAN-ROB"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet Rs 1,707/q. eNAM Rs 1,898/q. eNAM is HIGHER by Rs 191 (11.2%). Both same-day. Unusual for eNAM to report a premium.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Dindigul (65km) Rs 1,620. Madurai Periyar (98km) Rs 1,666. Regional cluster Rs 1,620-1,707. eNAM's Rs 1,898 is a clear outlier.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March banana at index 0.95 (slight seasonal dip). Rs 1,707 is consistent. Rs 1,898 would imply index 1.06 — a premium typically seen only during October-November festival season.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrivals 145 quintals — 30% BELOW 7-day average of 210. Significant supply drop. A banana shipment from Theni was delayed due to truck breakdown on NH-44, creating temporary scarcity that spiked eNAM's price.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Gap Rs 191. Dindigul transport Rs 163/q. Margin of Rs 28/q — barely profitable. With banana's high perishability (3% transport loss), arbitrage isn't viable. The premium will self-correct when the delayed shipment arrives.",
+                },
+            ],
+            "reasoning": "Temporary supply disruption (delayed Theni shipment) spiked eNAM's price on a thin-volume day. Agmarknet's auction price reflects normal supply. Premium will self-correct. Trust Agmarknet.",
+            "resolution": "trust_agmarknet",
+            "confidence": 0.84,
+        },
+        # ── Story: Kumbakonam black gram — procurement agent distortion ──
+        ("MND-KBK", "URD-BLK"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet Rs 7,785/q. eNAM Rs 6,971/q. eNAM is lower by Rs 814 (10.5%). Both same-day. Large gap for a staple pulse.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Thanjavur (25km) Rs 7,650. Tiruchirappalli (55km) Rs 7,700. Ramanathapuram (120km) — no eNAM. Cluster Rs 7,650-7,700 supports Agmarknet range.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March urad at seasonal high (index 1.05) as kharif stocks deplete before next harvest. Rs 7,785 is consistent with lean-season premium. Rs 6,971 would be below baseline — implausible in March.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrivals 85 quintals — 40% below 7-day average of 140. Very thin market day. A government procurement agent may have listed a below-market reserved-price lot on eNAM, pulling down the average.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Gap Rs 814. Thanjavur transport Rs 63/q. Gap is 13x transport cost — if eNAM's price were real, every trader in the delta would converge on Kumbakonam. This is clearly a reporting anomaly.",
+                },
+            ],
+            "reasoning": "eNAM likely recorded a government procurement lot at reserved price on a thin-volume day. Thanjavur and Tiruchirappalli confirm market rate near Rs 7,700. Trust Agmarknet.",
+            "resolution": "trust_agmarknet",
+            "confidence": 0.89,
+        },
+        # ── Story: Vellore rice — different variety mix ──
+        ("MND-VLR", "RICE-SAMBA"): {
+            "investigation_steps": [
+                {
+                    "tool": "compare_sources",
+                    "finding": "Agmarknet Rs 1,979/q. eNAM Rs 2,132/q. eNAM higher by Rs 153 (7.7%). Both same-day. Vellore trades both Samba and Ponni rice — variety mix may explain the gap.",
+                },
+                {
+                    "tool": "check_neighboring_mandis",
+                    "finding": "Villupuram (85km) Rs 2,000. Tiruchirappalli (180km) Rs 2,047. Cluster Rs 2,000-2,047 — closer to Agmarknet. Vellore is at the northern edge of the Samba belt, with more Ponni trading.",
+                },
+                {
+                    "tool": "seasonal_norm_check",
+                    "finding": "March Samba rice at seasonal index 0.92 (post-rabi trough). Rs 1,979 matches. Rs 2,132 would be index 0.97 — plausible only if some Ponni (which commands a 5-8% premium) is mixed into eNAM's average.",
+                },
+                {
+                    "tool": "verify_arrival_volumes",
+                    "finding": "Arrivals 120 quintals vs 7-day average of 135. Slightly below normal. Vellore's mixed-variety market means eNAM's weighted average naturally skews higher when Ponni lots dominate.",
+                },
+                {
+                    "tool": "transport_arbitrage_check",
+                    "finding": "Gap Rs 153. Villupuram transport Rs 213/q. Transport cost exceeds the price gap — no arbitrage possible. Gap is explainable by variety composition, not market inefficiency.",
+                },
+            ],
+            "reasoning": "Vellore trades both Samba and Ponni rice. eNAM's weighted average includes premium Ponni lots, inflating the figure. Agmarknet's modal price better reflects pure Samba. Weighted 60/40 toward Agmarknet.",
+            "resolution": "weighted_average",
+            "confidence": 0.80,
+        },
+    }
+
+    # Apply narrative overrides to conflicts (preserves all other fields)
+    for conflict in price_conflicts:
+        key = (conflict["mandi_id"], conflict["commodity_id"])
+        if key in _conflict_narratives:
+            narrative = _conflict_narratives[key]
+            conflict["investigation_steps"] = narrative["investigation_steps"]
+            conflict["reasoning"] = narrative["reasoning"]
+            if "resolution" in narrative:
+                conflict["resolution"] = narrative["resolution"]
+            if "confidence" in narrative:
+                # Update the reconciled price based on narrative confidence/resolution
+                agm = conflict["agmarknet_price"]
+                enam = conflict["enam_price"]
+                res = narrative["resolution"]
+                if res == "trust_agmarknet":
+                    conflict["reconciled_price"] = round(agm * 0.92 + enam * 0.08)
+                elif res == "weighted_average":
+                    conflict["reconciled_price"] = round(agm * 0.60 + enam * 0.40)
+                elif res == "weighted_toward_agmarknet":
+                    conflict["reconciled_price"] = round(agm * 0.65 + enam * 0.35)
+
     # ── Price forecasts ──
     price_forecasts = []
     forecast_by_mandi: dict[str, dict] = {}

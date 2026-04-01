@@ -10,7 +10,7 @@ import { formatRs } from '../lib/format'
 
 function deltaPctColor(pct: number): string {
   if (pct >= 10) return '#e63946'
-  if (pct >= 5) return '#d4a019'
+  if (pct >= 5) return '#0d7377'
   return '#2a9d8f'
 }
 
@@ -122,6 +122,15 @@ export default function Inputs() {
                 </div>
               </div>
 
+              {/* VS divider */}
+              <div className="flex items-center justify-center gap-3">
+                <div className="flex-1 h-px bg-warm-border" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0" style={{ background: '#0d7377' }}>
+                  VS
+                </div>
+                <div className="flex-1 h-px bg-warm-border" />
+              </div>
+
               {/* eNAM report */}
               <div
                 className="rounded-lg p-5"
@@ -208,21 +217,29 @@ export default function Inputs() {
                 </div>
               </div>
 
-              {/* Investigation steps */}
+              {/* Investigation steps — case file style */}
               {sampleConflict.investigation_steps && (
                 <div className="card-accent accent-amber p-4">
                   <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider mb-3 m-0">
                     Agent Investigation
                   </p>
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     {sampleConflict.investigation_steps.map((step, i) => (
-                      <div key={i} className="flex gap-2">
-                        <span className="shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center text-[0.6rem] font-bold" style={{ background: 'rgba(212,160,25,0.15)', color: '#d4a019' }}>
+                      <div key={i} className="flex gap-3 items-start">
+                        <div
+                          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[0.6rem] font-bold text-white"
+                          style={{ background: '#0d7377' }}
+                        >
                           {i + 1}
-                        </span>
-                        <div>
-                          <span className="text-[0.7rem] font-mono font-semibold text-warm-muted">{step.tool}</span>
-                          <p className="text-xs text-warm-body leading-relaxed m-0 mt-0.5">{step.finding}</p>
+                        </div>
+                        <div className="flex-1">
+                          <code
+                            className="text-[0.7rem] font-mono font-semibold px-1.5 py-0.5 rounded"
+                            style={{ background: 'rgba(13,115,119,0.08)', color: '#0d7377' }}
+                          >
+                            {step.tool}
+                          </code>
+                          <p className="text-xs text-warm-body leading-relaxed m-0 mt-1">{step.finding}</p>
                         </div>
                       </div>
                     ))}
@@ -246,6 +263,11 @@ export default function Inputs() {
                   </p>
                 </div>
               )}
+
+              {/* Novelty annotation */}
+              <p className="text-xs italic text-warm-muted mt-3 m-0 leading-relaxed">
+                No existing tool reconciles these two government databases. This is the first.
+              </p>
 
               {/* Related prices for this mandi/commodity */}
               {samplePrices.length > 0 && (
