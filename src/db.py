@@ -71,7 +71,7 @@ class MarketPrice(Base):
     mandi_id = Column(String(20), nullable=False, index=True)
     commodity_id = Column(String(20), nullable=False, index=True)
     date = Column(String(10))
-    source = Column(String(20))
+    source = Column(String(100))
     price_rs = Column(Float)
     arrivals_tonnes = Column(Float)
     quality_flag = Column(String(20))
