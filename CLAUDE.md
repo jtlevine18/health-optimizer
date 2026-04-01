@@ -14,7 +14,7 @@ Each step has Claude agent + rule-based fallback. Pipeline runs end-to-end witho
 1. **INGEST** — Agmarknet API (data.gov.in), eNAM scraper (simulated), NASA POWER weather
 2. **EXTRACT** — Normalize commodity names, detect stale data, flag anomalies (5 Claude tools)
 3. **RECONCILE** — Resolve Agmarknet vs eNAM price conflicts (5 Claude investigation tools: compare_sources, check_neighbors, seasonal_norms, verify_arrivals, transport_arbitrage)
-4. **FORECAST** — XGBoost price model, 15 features, 7/14/30d horizons with confidence intervals
+4. **FORECAST** — Chronos foundation model (Amazon) + XGBoost MOS bias correction, 7/14/30d horizons with probabilistic CI from Chronos quantiles. Fallback chain: Chronos + MOS -> XGBoost standalone -> seasonal baseline
 5. **OPTIMIZE** — Sell optimizer (net price after transport + storage loss + mandi fees) + credit readiness assessment
 6. **RECOMMEND** — Claude-generated sell advice in English + Tamil via RAG
 
@@ -30,7 +30,8 @@ src/ingestion/enam_scraper.py      — Simulated eNAM prices with realistic 3-12
 src/ingestion/nasa_power.py        — NASA POWER async client
 src/extraction/agent.py            — Claude + RuleBasedExtractor (normalize, stale detection, anomalies)
 src/reconciliation/agent.py        — Claude + RuleBasedReconciler (5 investigation tools)
-src/forecasting/price_model.py     — XGBoostPriceModel (15 features, seasonal baseline fallback)
+src/forecasting/price_model.py     — ChronosXGBoostForecaster (Chronos + MOS) + XGBoostPriceModel (15 features, fallback)
+src/forecasting/chronos_model.py   — Amazon Chronos foundation model wrapper (Bolt V2 or T5-small V1)
 src/optimizer.py                   — SellOption/SellRecommendation + CreditReadiness assessment
 src/recommendation_agent.py        — Claude broker agent (5 tools, English + Tamil)
 src/rag/knowledge_base.py          — 27 chunks: TN crop calendars, MSP, storage, mandi regulations
@@ -48,8 +49,9 @@ frontend/src/pages/SellOptimizer.tsx — Farmer cards + sell options table + cre
 frontend/src/pages/Pipeline.tsx     — 6-step architecture view + run history
 frontend/src/pages/Inputs.tsx       — Side-by-side reconciliation with investigation steps
 frontend/src/lib/api.ts             — Types + React Query hooks
-frontend/src/lib/tour.ts            — Joyride tour (11 steps, story-driven)
-frontend/src/components/Sidebar.tsx — Nav with amber/saffron accent
+frontend/src/lib/tour.ts            — Joyride tour (12 steps, story-driven, teal accent)
+frontend/src/components/TourTooltip.tsx — Custom tooltip with step counter
+frontend/src/components/Sidebar.tsx — Nav with deep teal (#0d7377) accent
 ```
 
 ## Running locally
@@ -91,6 +93,31 @@ Integrated into the sell optimizer (not a standalone tool). For each farmer, aft
 - Generates bilingual advice (English + Tamil)
 
 The framing is farmer-centric: "should you seek credit?" not "should a lender approve you?"
+
+## Adapting for a new region
+
+This pipeline is designed to be forked. See [REBUILD.md](REBUILD.md) for the full guide.
+
+### Geography-coupled files (must change per region)
+
+| File | What's region-specific |
+|------|----------------------|
+| `markets.json` | Market definitions (lat/lon, commodities traded) |
+| `commodities.json` | Crops, seasonal indices, base prices, aliases |
+| `farmers.json` | Demo farmer personas |
+| `config.py` | Loads from JSON; transport costs, mandi fees |
+| `src/ingestion/agmarknet.py` | India-specific API client |
+| `src/ingestion/enam_scraper.py` | India-specific scraper |
+| `src/extraction/agent.py` | Commodity aliases, Claude prompt |
+| `src/reconciliation/agent.py` | Claude prompt references region |
+| `src/recommendation_agent.py` | Translation language, Claude prompt |
+| `src/rag/knowledge_base.py` | 27 chunks of region-specific knowledge |
+| `frontend/src/regionConfig.ts` | Currency, language, map center, labels |
+| `frontend/src/lib/tour.ts` | Guided tour narrative |
+
+### Globally portable files (no changes needed)
+
+`src/pipeline.py`, `src/forecasting/price_model.py`, `src/optimizer.py`, `src/rag/provider.py`, `src/store.py`, `src/ingestion/nasa_power.py`, `src/ingestion/base.py` (PriceSource protocol), all frontend pages, `src/lib/api.ts`.
 
 ## Important conventions
 

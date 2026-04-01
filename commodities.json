@@ -1,0 +1,198 @@
+[
+  {
+    "id": "RICE-SAMBA",
+    "name": "Rice (Samba Paddy)",
+    "agmarknet_name": "Paddy",
+    "unit": "quintal",
+    "category": "cereal",
+    "perishability": "low",
+    "msp_2025_rs": 2300,
+    "base_price_rs": 2200,
+    "harvest_windows": [
+      {"season": "kharif", "months": [9, 10]},
+      {"season": "rabi", "months": [1, 2]}
+    ],
+    "seasonal_indices": {
+      "1": 0.90, "2": 0.88, "3": 0.92, "4": 0.98, "5": 1.10, "6": 1.15,
+      "7": 1.12, "8": 1.08, "9": 1.02, "10": 0.85, "11": 0.88, "12": 0.92
+    },
+    "post_harvest_loss": {"harvesting": 3.5, "threshing": 2.0, "transport": 1.5, "storage_per_month": 2.5},
+    "aliases": ["Paddy(Samba)", "Paddy (Samba Masuri)", "Samba Rice"]
+  },
+  {
+    "id": "GNUT-POD",
+    "name": "Groundnut",
+    "agmarknet_name": "Groundnut",
+    "unit": "quintal",
+    "category": "oilseed",
+    "perishability": "low",
+    "msp_2025_rs": 6377,
+    "base_price_rs": 5800,
+    "harvest_windows": [
+      {"season": "kharif", "months": [6, 7]},
+      {"season": "rabi", "months": [12, 1]}
+    ],
+    "seasonal_indices": {
+      "1": 0.92, "2": 0.95, "3": 1.00, "4": 1.05, "5": 1.10, "6": 0.88,
+      "7": 0.85, "8": 0.95, "9": 1.00, "10": 1.05, "11": 1.08, "12": 0.92
+    },
+    "post_harvest_loss": {"harvesting": 4.0, "threshing": 3.0, "transport": 1.0, "storage_per_month": 3.0},
+    "aliases": ["Groundnut (Pods)", "Groundnut pods"]
+  },
+  {
+    "id": "TUR-FIN",
+    "name": "Turmeric",
+    "agmarknet_name": "Turmeric(Finger)",
+    "unit": "quintal",
+    "category": "spice",
+    "perishability": "low",
+    "msp_2025_rs": null,
+    "base_price_rs": 12500,
+    "harvest_windows": [
+      {"season": "rabi", "months": [1, 2, 3]}
+    ],
+    "seasonal_indices": {
+      "1": 0.88, "2": 0.85, "3": 0.82, "4": 0.90, "5": 0.95, "6": 1.00,
+      "7": 1.05, "8": 1.10, "9": 1.15, "10": 1.12, "11": 1.08, "12": 0.95
+    },
+    "post_harvest_loss": {"harvesting": 2.0, "threshing": 1.5, "transport": 0.5, "storage_per_month": 1.5},
+    "aliases": ["Turmeric(Finger)", "Haldi", "Manjal"]
+  },
+  {
+    "id": "COT-MCU",
+    "name": "Cotton",
+    "agmarknet_name": "Cotton",
+    "unit": "quintal",
+    "category": "cash_crop",
+    "perishability": "low",
+    "msp_2025_rs": 7121,
+    "base_price_rs": 6800,
+    "harvest_windows": [
+      {"season": "kharif", "months": [11, 12, 1]}
+    ],
+    "seasonal_indices": {
+      "1": 0.90, "2": 0.95, "3": 1.00, "4": 1.05, "5": 1.10, "6": 1.12,
+      "7": 1.08, "8": 1.05, "9": 1.00, "10": 0.95, "11": 0.88, "12": 0.85
+    },
+    "post_harvest_loss": {"harvesting": 3.0, "threshing": 1.0, "transport": 0.5, "storage_per_month": 1.0},
+    "aliases": ["Cotton (Kapas)", "Kapas", "Paruthi"]
+  },
+  {
+    "id": "ONI-RED",
+    "name": "Onion",
+    "agmarknet_name": "Onion",
+    "agmarknet_aliases": ["Onion Red"],
+    "unit": "quintal",
+    "category": "vegetable",
+    "perishability": "medium",
+    "msp_2025_rs": null,
+    "base_price_rs": 1800,
+    "harvest_windows": [
+      {"season": "kharif", "months": [10, 11, 12]},
+      {"season": "rabi", "months": [3, 4, 5]}
+    ],
+    "seasonal_indices": {
+      "1": 1.10, "2": 1.05, "3": 0.85, "4": 0.80, "5": 0.82, "6": 0.95,
+      "7": 1.05, "8": 1.15, "9": 1.25, "10": 1.20, "11": 0.90, "12": 0.88
+    },
+    "post_harvest_loss": {"harvesting": 3.0, "threshing": 0.0, "transport": 2.0, "storage_per_month": 5.0},
+    "aliases": ["Onion Red", "Vengayam"]
+  },
+  {
+    "id": "COP-DRY",
+    "name": "Coconut (Copra)",
+    "agmarknet_name": "Coconut",
+    "unit": "quintal",
+    "category": "oilseed",
+    "perishability": "medium",
+    "msp_2025_rs": 10860,
+    "base_price_rs": 10200,
+    "harvest_windows": [
+      {"season": "year_round", "months": [2, 3, 4]}
+    ],
+    "seasonal_indices": {
+      "1": 0.95, "2": 0.90, "3": 0.88, "4": 0.90, "5": 0.95, "6": 1.00,
+      "7": 1.05, "8": 1.08, "9": 1.10, "10": 1.08, "11": 1.05, "12": 1.00
+    },
+    "post_harvest_loss": {"harvesting": 2.0, "threshing": 1.5, "transport": 1.0, "storage_per_month": 2.0},
+    "aliases": ["Coconut", "Copra", "Thengai"]
+  },
+  {
+    "id": "MZE-YEL",
+    "name": "Maize",
+    "agmarknet_name": "Maize",
+    "unit": "quintal",
+    "category": "cereal",
+    "perishability": "low",
+    "msp_2025_rs": 2225,
+    "base_price_rs": 2100,
+    "harvest_windows": [
+      {"season": "kharif", "months": [9, 10]},
+      {"season": "rabi", "months": [2, 3]}
+    ],
+    "seasonal_indices": {
+      "1": 0.95, "2": 0.90, "3": 0.88, "4": 0.95, "5": 1.05, "6": 1.10,
+      "7": 1.12, "8": 1.08, "9": 1.00, "10": 0.85, "11": 0.90, "12": 0.92
+    },
+    "post_harvest_loss": {"harvesting": 3.5, "threshing": 2.5, "transport": 1.5, "storage_per_month": 2.5},
+    "aliases": ["Maize (Yellow)", "Makka Cholam"]
+  },
+  {
+    "id": "URD-BLK",
+    "name": "Black Gram (Urad)",
+    "agmarknet_name": "Urad (Black Gram)",
+    "agmarknet_aliases": ["Black Gram (Whole)"],
+    "unit": "quintal",
+    "category": "cereal",
+    "perishability": "low",
+    "msp_2025_rs": 6950,
+    "base_price_rs": 7500,
+    "harvest_windows": [
+      {"season": "kharif", "months": [10, 11]}
+    ],
+    "seasonal_indices": {
+      "1": 0.95, "2": 1.00, "3": 1.05, "4": 1.10, "5": 1.15, "6": 1.12,
+      "7": 1.08, "8": 1.05, "9": 1.00, "10": 0.88, "11": 0.85, "12": 0.90
+    },
+    "post_harvest_loss": {"harvesting": 3.0, "threshing": 2.0, "transport": 1.0, "storage_per_month": 2.0},
+    "aliases": ["Black Gram (Whole)", "Urad Dal", "Ulundhu"]
+  },
+  {
+    "id": "MNG-GRN",
+    "name": "Green Gram (Moong)",
+    "agmarknet_name": "Moong(Green Gram)",
+    "unit": "quintal",
+    "category": "cereal",
+    "perishability": "low",
+    "msp_2025_rs": 8558,
+    "base_price_rs": 8200,
+    "harvest_windows": [
+      {"season": "kharif", "months": [9, 10]}
+    ],
+    "seasonal_indices": {
+      "1": 0.95, "2": 1.00, "3": 1.05, "4": 1.10, "5": 1.15, "6": 1.12,
+      "7": 1.08, "8": 1.05, "9": 0.90, "10": 0.85, "11": 0.90, "12": 0.92
+    },
+    "post_harvest_loss": {"harvesting": 3.0, "threshing": 2.0, "transport": 1.0, "storage_per_month": 2.0},
+    "aliases": ["Moong(Green Gram)", "Green Gram", "Payiru"]
+  },
+  {
+    "id": "BAN-ROB",
+    "name": "Banana",
+    "agmarknet_name": "Banana",
+    "unit": "quintal",
+    "category": "fruit",
+    "perishability": "high",
+    "msp_2025_rs": null,
+    "base_price_rs": 1800,
+    "harvest_windows": [
+      {"season": "year_round", "months": [1,2,3,4,5,6,7,8,9,10,11,12]}
+    ],
+    "seasonal_indices": {
+      "1": 1.05, "2": 1.00, "3": 0.95, "4": 0.98, "5": 1.02, "6": 1.00,
+      "7": 0.95, "8": 0.98, "9": 1.05, "10": 1.08, "11": 1.10, "12": 1.05
+    },
+    "post_harvest_loss": {"harvesting": 5.0, "threshing": 0.0, "transport": 3.0, "storage_per_month": 8.0},
+    "aliases": ["Banana (Robusta)", "Vazhai"]
+  }
+]

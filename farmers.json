@@ -1,0 +1,35 @@
+[
+  {
+    "farmer_id": "FMR-LKSH",
+    "name": "Lakshmi",
+    "location_name": "Thanjavur",
+    "latitude": 10.78,
+    "longitude": 79.14,
+    "primary_commodity": "RICE-SAMBA",
+    "quantity_quintals": 25.0,
+    "has_storage": true,
+    "notes": "Smallholder rice farmer in the Cauvery delta. Has dry storage shed."
+  },
+  {
+    "farmer_id": "FMR-KUMR",
+    "name": "Kumar",
+    "location_name": "Erode",
+    "latitude": 11.34,
+    "longitude": 77.72,
+    "primary_commodity": "TUR-FIN",
+    "quantity_quintals": 15.0,
+    "has_storage": true,
+    "notes": "Turmeric grower near Erode market. Can hold inventory 2-3 months."
+  },
+  {
+    "farmer_id": "FMR-MEEN",
+    "name": "Meena",
+    "location_name": "Dindigul",
+    "latitude": 10.36,
+    "longitude": 77.97,
+    "primary_commodity": "BAN-ROB",
+    "quantity_quintals": 30.0,
+    "has_storage": false,
+    "notes": "Banana farmer. No cold storage -- must sell within 7 days of harvest."
+  }
+]
