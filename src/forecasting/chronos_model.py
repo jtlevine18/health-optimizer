@@ -56,8 +56,8 @@ except ImportError as e:
 # ── Constants ───────────────────────────────────────────────────────────
 
 # Model selection priority:
-# 1. chronos-bolt-base (Bolt V2, ~250x faster on CPU) -- requires Chronos2Pipeline
-# 2. chronos-t5-small (V1, 20M params, solid CPU perf) -- always works with ChronosPipeline
+# 1. chronos-bolt-tiny (Bolt V2, 8M params, ~250x faster on CPU) -- requires Chronos2Pipeline
+# 2. chronos-t5-tiny (V1, 8M params, solid CPU perf) -- always works with ChronosPipeline
 BOLT_MODEL_ID = "amazon/chronos-bolt-tiny"
 V1_MODEL_ID = "amazon/chronos-t5-tiny"
 
