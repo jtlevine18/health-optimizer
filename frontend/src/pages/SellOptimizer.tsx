@@ -198,44 +198,14 @@ export default function SellOptimizer() {
         const storage = best.storage_loss_rs
         const fee = best.mandi_fee_rs
         const net = best.net_price_rs
+        const totalDeductions = transport + storage + fee
 
-        const waterfallData = [
-          {
-            name: 'Market Price',
-            base: 0,
-            value: marketPrice,
-            fill: '#0d7377',
-            label: formatRs(marketPrice),
-          },
-          {
-            name: 'Transport',
-            base: marketPrice - transport,
-            value: transport,
-            fill: '#e63946',
-            label: `-${formatRs(transport)}`,
-          },
-          {
-            name: 'Storage Loss',
-            base: marketPrice - transport - storage,
-            value: storage,
-            fill: '#e63946',
-            label: `-${formatRs(storage)}`,
-          },
-          {
-            name: 'Mandi Fee',
-            base: marketPrice - transport - storage - fee,
-            value: fee,
-            fill: '#e63946',
-            label: `-${formatRs(fee)}`,
-          },
-          {
-            name: 'Net Price',
-            base: 0,
-            value: net,
-            fill: '#2a9d8f',
-            label: formatRs(net),
-          },
+        const deductions = [
+          { label: 'Transport', value: transport, pct: marketPrice > 0 ? (transport / marketPrice * 100) : 0 },
+          { label: 'Storage Loss', value: storage, pct: marketPrice > 0 ? (storage / marketPrice * 100) : 0 },
+          { label: 'Mandi Fee', value: fee, pct: marketPrice > 0 ? (fee / marketPrice * 100) : 0 },
         ]
+        const maxDeduction = Math.max(...deductions.map(d => d.value), 1)
 
         return (
           <div data-tour="waterfall" className="mb-8">
@@ -244,58 +214,61 @@ export default function SellOptimizer() {
               {activeFarmer.farmer_name} {'\u2192'} {best.mandi_name} ({best.sell_timing})
             </p>
             <div className="card card-body">
-              <div style={{ width: '100%', height: 280 }}>
-                <ResponsiveContainer>
-                  <BarChart data={waterfallData} margin={{ top: 20, right: 20, bottom: 5, left: 10 }}>
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 11, fill: '#666' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: '#888' }}
-                      tickFormatter={(v: number) => formatRs(v)}
-                      width={75}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1a1a1a',
-                        border: 'none',
-                        borderRadius: 8,
-                        color: '#e0dcd5',
-                        fontFamily: '"DM Sans", sans-serif',
-                        fontSize: '0.8rem',
-                      }}
-                      formatter={(_val: number, _name: string, props: { payload?: { label?: string; name?: string } }) => {
-                        const item = props.payload
-                        return [item?.label ?? '', item?.name ?? '']
-                      }}
-                    />
-                    {/* Invisible base bar */}
-                    <Bar dataKey="base" stackId="waterfall" fill="transparent" isAnimationActive={false}>
-                      <LabelList content={() => null} />
-                    </Bar>
-                    {/* Visible value bar */}
-                    <Bar dataKey="value" stackId="waterfall" radius={[4, 4, 0, 0]}>
-                      {waterfallData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                      <LabelList
-                        dataKey="label"
-                        position="top"
-                        style={{ fontSize: 11, fontWeight: 600, fill: '#1a1a1a' }}
+              {/* Summary line */}
+              <div className="flex items-center gap-3 mb-5 text-sm">
+                <span style={{ color: '#0d7377', fontWeight: 700 }}>{formatRs(marketPrice)}</span>
+                <span className="text-warm-muted">&minus;</span>
+                <span style={{ color: '#e63946', fontWeight: 600 }}>{formatRs(totalDeductions)}</span>
+                <span className="text-warm-muted">=</span>
+                <span style={{ color: '#2a9d8f', fontWeight: 700, fontSize: '1.1rem' }}>{formatRs(net)}/q</span>
+              </div>
+
+              {/* Deduction bars */}
+              <div className="space-y-3">
+                {deductions.map((d) => (
+                  <div key={d.label}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-warm-body font-medium">{d.label}</span>
+                      <span style={{ color: '#e63946', fontWeight: 600 }}>
+                        &minus;{formatRs(d.value)} <span className="text-warm-muted">({d.pct.toFixed(1)}%)</span>
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full" style={{ background: '#f0ede8' }}>
+                      <div
+                        className="h-2 rounded-full"
+                        style={{
+                          background: '#e63946',
+                          width: `${Math.max((d.value / maxDeduction) * 100, d.value > 0 ? 4 : 0)}%`,
+                          transition: 'width 0.5s ease',
+                        }}
                       />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Net price bar */}
+              <div className="mt-4 pt-3 border-t border-warm-border/40">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-warm-body font-semibold">Net to farmer</span>
+                  <span style={{ color: '#2a9d8f', fontWeight: 700 }}>{formatRs(net)}/q</span>
+                </div>
+                <div className="h-3 rounded-full" style={{ background: '#f0ede8' }}>
+                  <div
+                    className="h-3 rounded-full"
+                    style={{
+                      background: '#2a9d8f',
+                      width: `${marketPrice > 0 ? (net / marketPrice * 100) : 0}%`,
+                      transition: 'width 0.5s ease',
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>
         )
       })()}
+
 
       {/* ── Credit Readiness ─────────────────────────────────────────── */}
       {activeFarmer?.credit_readiness && (
