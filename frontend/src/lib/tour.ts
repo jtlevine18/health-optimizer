@@ -43,28 +43,7 @@ export const tourSteps: Step[] = [
     placement: 'top',
     disableBeacon: true,
   },
-  // ── Step 5: Navigate to Inputs (/inputs) ──
-  {
-    target: '[data-tour="inputs-title"]',
-    title: 'This is the page nobody else has built',
-    content:
-      'When Agmarknet says \u20b92,100 and eNAM says \u20b92,250 for the same rice at the same mandi \u2014 ' +
-      'what do you trust? This page shows you exactly how the AI investigated and decided.',
-    placement: 'bottom',
-    disableBeacon: true,
-  },
-  // ── Step 6: Reconciliation detail (/inputs) ──
-  {
-    target: '[data-tour="inputs-reconciled"]',
-    title: 'Investigation, not averaging',
-    content:
-      'The AI doesn\u2019t split the difference. It checks five things: which source is fresher, ' +
-      'what neighboring mandis report, whether the price fits the season, whether arrival volumes explain the gap, ' +
-      'and whether transport costs make the spread plausible. Then it decides.',
-    placement: 'top',
-    disableBeacon: true,
-  },
-  // ── Step 7: Navigate to Forecast (/forecast) ──
+  // ── Step 5: Navigate to Forecast (/forecast) ──
   {
     target: '[data-tour="forecast-title"]',
     title: 'Should she sell now or wait two weeks?',
@@ -135,14 +114,12 @@ export const stepRoutes: Record<number, string> = {
   1: '/',
   2: '/',
   3: '/',
-  4: '/inputs',
-  5: '/inputs',
-  6: '/forecast',
-  7: '/forecast',
+  4: '/forecast',
+  5: '/forecast',
+  6: '/sell',
+  7: '/sell',
   8: '/sell',
-  9: '/sell',
-  10: '/sell',
-  11: '/',
+  9: '/',
 }
 
 export const tourStyles = {
