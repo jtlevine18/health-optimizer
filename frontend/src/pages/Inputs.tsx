@@ -111,7 +111,7 @@ export default function Inputs() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-warm-muted">Commodity</span>
-                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.commodity_name}</span>
+                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.commodity_name || sampleConflict.commodity_id}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-warm-muted">Price</span>
@@ -151,7 +151,7 @@ export default function Inputs() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-warm-muted">Commodity</span>
-                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.commodity_name}</span>
+                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.commodity_name || sampleConflict.commodity_id}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-warm-muted">Price</span>
@@ -171,8 +171,8 @@ export default function Inputs() {
                 }}
               >
                 <span className="text-xs text-warm-muted">Price difference: </span>
-                <span className="text-sm font-serif font-bold" style={{ color: deltaPctColor(sampleConflict.delta_pct) }}>
-                  {sampleConflict.delta_pct.toFixed(1)}%
+                <span className="text-sm font-serif font-bold" style={{ color: deltaPctColor(sampleConflict.delta_pct || 0) }}>
+                  {(sampleConflict.delta_pct || 0).toFixed(1)}%
                 </span>
                 <span className="text-xs text-warm-muted">
                   {' '}({formatRs(Math.abs(sampleConflict.agmarknet_price - sampleConflict.enam_price))})
@@ -206,7 +206,7 @@ export default function Inputs() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-warm-muted">Commodity</span>
-                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.commodity_name}</span>
+                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.commodity_name || sampleConflict.commodity_id}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-warm-muted">Final price</span>
@@ -246,7 +246,7 @@ export default function Inputs() {
                   </div>
                   <div className="mt-3 pt-3 border-t border-warm-border">
                     <p className="text-xs font-semibold m-0" style={{ color: '#2a9d8f' }}>
-                      Decision: {sampleConflict.reasoning}
+                      Decision: {sampleConflict.reasoning || sampleConflict.resolution || "—"}
                     </p>
                   </div>
                 </div>
@@ -259,14 +259,14 @@ export default function Inputs() {
                     AI Reasoning
                   </p>
                   <p className="text-sm text-warm-body leading-relaxed m-0">
-                    {sampleConflict.reasoning}
+                    {sampleConflict.reasoning || sampleConflict.resolution || "—"}
                   </p>
                 </div>
               )}
 
-              {/* Novelty annotation */}
+              {/* Context */}
               <p className="text-xs italic text-warm-muted mt-3 m-0 leading-relaxed">
-                No existing tool reconciles these two government databases. This is the first.
+                When government databases disagree, this system investigates and decides which price to trust.
               </p>
 
               {/* Related prices for this mandi/commodity */}
@@ -314,22 +314,22 @@ export default function Inputs() {
                 {conflictList.map((c, i) => (
                   <tr key={`${c.mandi_id}-${c.commodity_id}-${i}`}>
                     <td className="font-semibold text-[#1a1a1a]">{c.mandi_name}</td>
-                    <td>{c.commodity_name}</td>
+                    <td>{c.commodity_name || c.commodity_id}</td>
                     <td>{formatRs(c.agmarknet_price)}</td>
                     <td>{formatRs(c.enam_price)}</td>
                     <td>
-                      <span className="font-semibold" style={{ color: deltaPctColor(c.delta_pct) }}>
-                        {c.delta_pct.toFixed(1)}%
+                      <span className="font-semibold" style={{ color: deltaPctColor(c.delta_pct || 0) }}>
+                        {(c.delta_pct || 0).toFixed(1)}%
                       </span>
                     </td>
                     <td>
-                      <span className="badge-amber text-[0.65rem]">{c.resolution}</span>
+                      <span className="badge-amber text-[0.65rem]">{c.resolution || 'auto'}</span>
                     </td>
                     <td className="font-semibold" style={{ color: '#2a9d8f' }}>
                       {formatRs(c.reconciled_price)}
                     </td>
                     <td className="text-xs text-warm-body max-w-xs">
-                      {c.reasoning.length > 100 ? c.reasoning.slice(0, 100) + '\u2026' : c.reasoning}
+                      {(c.reasoning || c.resolution || '—').length > 100 ? (c.reasoning || '').slice(0, 100) + '\u2026' : (c.reasoning || c.resolution || '—')}
                     </td>
                   </tr>
                 ))}

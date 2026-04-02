@@ -96,30 +96,30 @@ export const tourSteps: Step[] = [
     placement: 'top',
     disableBeacon: true,
   },
-  // ── Step 12: Closing (/) ──
+  // ── Step 12: End on Pipeline ──
   {
-    target: '[data-tour="hero"]',
-    title: 'The hard problem remains',
+    target: '[data-tour="nav-pipeline"]',
+    title: 'How it all fits together',
     content:
-      'The algorithm is the easy part. The hard problems are human: getting smartphones into farmers\u2019 hands, ' +
-      'building trust in data-driven advice, connecting this to the platforms farmers already use. ' +
-      'That\u2019s where the investment should go.',
-    placement: 'center',
+      'Finally: the full system architecture — six automated steps, from scraping government databases ' +
+      'to generating personalized sell advice in Tamil. You can see the run history, cost per pipeline, ' +
+      'and how to deploy this for a different region or set of crops.',
+    placement: 'right',
     disableBeacon: true,
   },
 ]
 
 export const stepRoutes: Record<number, string> = {
-  0: '/',
-  1: '/',
-  2: '/',
-  3: '/',
-  4: '/forecast',
-  5: '/forecast',
-  6: '/sell',
-  7: '/sell',
-  8: '/sell',
-  9: '/',
+  0: '/',         // hero
+  1: '/',         // callout
+  2: '/',         // metrics
+  3: '/',         // price table
+  4: '/forecast', // forecast title
+  5: '/forecast', // forecast metrics
+  6: '/sell',     // sell title
+  7: '/sell',     // waterfall
+  8: '/sell',     // credit readiness
+  9: '/sell',     // nav-pipeline (end)
 }
 
 export const tourStyles = {
