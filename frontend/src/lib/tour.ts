@@ -8,7 +8,7 @@ export const tourSteps: Step[] = [
     content:
       'She harvests in September. Three mandis within 40km, each quoting a different price. ' +
       'She sells at the nearest one for whatever the middleman offers \u2014 and loses 15\u201330% of what her rice is actually worth. ' +
-      'This tool is her broker.',
+      'This tool does what a broker would: tells her which market, which day, and at what net price after transport and fees.',
     placement: 'bottom',
     disableBeacon: true,
   },
@@ -28,7 +28,8 @@ export const tourSteps: Step[] = [
     title: '15 real mandis. 10 commodities. Updated daily.',
     content:
       'These are real regulated markets from Thanjavur to Tirunelveli, with prices from the actual Agmarknet API. ' +
-      'The number next to \u2018Conflicts\u2019 shows how many times the two databases disagreed today.',
+      'The \u2018Conflicts\u2019 count shows how many prices the two government databases disagreed on \u2014 ' +
+      'each one is a case where a farmer wouldn\u2019t know which number to trust.',
     placement: 'top',
     disableBeacon: true,
   },
@@ -48,8 +49,8 @@ export const tourSteps: Step[] = [
     target: '[data-tour="forecast-title"]',
     title: 'Should she sell now or wait two weeks?',
     content:
-      'A neural price model (Chronos-2) trained on commodity patterns predicts prices at 7, 14, and 30 days \u2014 ' +
-      'with real confidence intervals from probabilistic sampling, not guesses. ' +
+      'The system predicts prices at 7, 14, and 30 days \u2014 ' +
+      'with honest confidence ranges so farmers know how much to trust each forecast. ' +
       'Rice typically drops 15% in October as harvest floods the market, then climbs through May.',
     placement: 'bottom',
     disableBeacon: true,
@@ -60,8 +61,8 @@ export const tourSteps: Step[] = [
     title: 'The confidence band matters',
     content:
       '\u20b92,300 \u00b1 \u20b9150 is a strong signal. \u20b92,300 \u00b1 \u20b9500 means wait for more data. ' +
-      'The wider the band, the less you should trust the number. ' +
-      'Chronos-2 generates these intervals natively \u2014 they\u2019re real probability distributions, not estimates.',
+      'The wider the band, the less certain the forecast \u2014 ' +
+      'and the more reason to hold off on a sell decision.',
     placement: 'bottom',
     disableBeacon: true,
   },
@@ -101,9 +102,9 @@ export const tourSteps: Step[] = [
     target: '[data-tour="nav-pipeline"]',
     title: 'How it all fits together',
     content:
-      'Finally: the full system architecture — six automated steps, from scraping government databases ' +
-      'to generating personalized sell advice in Tamil. You can see the run history, cost per pipeline, ' +
-      'and how to deploy this for a different region or set of crops.',
+      'The full chain — from scraping two government databases to generating a personalized ' +
+      'sell recommendation in Tamil. The system is designed to be forked ' +
+      'for a different region, set of crops, or market network.',
     placement: 'right',
     disableBeacon: true,
   },
