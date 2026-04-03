@@ -68,12 +68,6 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-5 py-3 border-t border-white/10">
-        <p className="text-[10px] text-[#e0dcd5]/60 font-sans uppercase tracking-wider m-0">
-          Tamil Nadu Agricultural Markets
-        </p>
-      </div>
     </aside>
   )
 }
