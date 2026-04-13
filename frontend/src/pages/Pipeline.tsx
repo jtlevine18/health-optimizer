@@ -59,6 +59,14 @@ const PIPELINE_STEPS = [
       { label: 'Tamil Translation', note: 'Bilingual output for farmer accessibility', active: true },
     ],
   },
+  {
+    num: 7, name: 'Deliver', table: 'delivery_logs', color: '#d4a019',
+    desc: 'Sends personalized sell advice to each farmer by SMS in English and Tamil, with Twilio dry-run mode by default',
+    options: [
+      { label: 'Console (Dry Run)', note: 'Logs SMS text to pipeline output for testing', active: true },
+      { label: 'Twilio SMS', note: 'Live delivery to farmer phones when credentials are configured' },
+    ],
+  },
 ]
 
 // ── Architecture Diagram Component ───────────────────────────────────────────
@@ -190,7 +198,7 @@ export default function Pipeline() {
       {/* Architecture Tab */}
       {tab === 'architecture' && (
         <div className="animate-tab-enter space-y-6">
-          <div className="section-header">From Scraping to Sell Advice in 6 Steps</div>
+          <div className="section-header">From Scraping to Sell Advice in 7 Steps</div>
           <ArchitectureDiagram />
 
           <div className="mt-8">

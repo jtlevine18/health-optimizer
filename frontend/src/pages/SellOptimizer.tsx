@@ -14,7 +14,7 @@ import {
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import MetricCard from '../components/MetricCard'
 import { LoadingSpinner, ErrorState } from '../components/LoadingState'
-import { useSellRecommendations, useMandis, type SellRecommendation } from '../lib/api'
+import { useSellRecommendations, useMandis, useDeliveryLogs, type SellRecommendation } from '../lib/api'
 import { formatRs } from '../lib/format'
 
 function netPriceColor(net: number, best: number): string {
@@ -26,6 +26,7 @@ function netPriceColor(net: number, best: number): string {
 export default function SellOptimizer() {
   const recommendations = useSellRecommendations()
   const mandis = useMandis()
+  const deliveryLogs = useDeliveryLogs()
   const [selectedFarmer, setSelectedFarmer] = useState<number>(0)
   const [expandedReasoning, setExpandedReasoning] = useState<number | null>(null)
 
@@ -525,6 +526,71 @@ export default function SellOptimizer() {
           </div>
         </div>
       )}
+
+      {/* ── Delivery Log ──────────────────────────────────────────────── */}
+      <div className="mb-8">
+        <div className="section-header">Delivery Log</div>
+        {(() => {
+          const logs = deliveryLogs.data?.delivery_logs ?? []
+          if (deliveryLogs.isLoading) return <LoadingSpinner />
+          if (!logs.length) {
+            return (
+              <p className="text-sm text-warm-muted" style={{ maxWidth: 540 }}>
+                No deliveries recorded yet — recommendations are generated but SMS delivery is not yet configured.
+              </p>
+            )
+          }
+          const statusColor: Record<string, string> = {
+            sent: '#2a9d8f',
+            dry_run: '#d4a019',
+            failed: '#e63946',
+            skipped: '#888',
+          }
+          return (
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Farmer</th>
+                    <th>Phone</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log, idx) => (
+                    <tr key={idx}>
+                      <td className="font-semibold text-[#1a1a1a]">{log.farmer_name}</td>
+                      <td className="text-xs text-warm-muted font-mono">{log.phone}</td>
+                      <td>
+                        <span
+                          className="text-[0.7rem] font-semibold px-2 py-0.5 rounded-md"
+                          style={{
+                            color: statusColor[log.status] ?? '#888',
+                            background: `${statusColor[log.status] ?? '#888'}14`,
+                            border: `1px solid ${statusColor[log.status] ?? '#888'}44`,
+                          }}
+                        >
+                          {log.status}
+                        </span>
+                      </td>
+                      <td className="text-xs text-warm-body" style={{ maxWidth: 280 }}>
+                        <span title={log.sms_text}>
+                          {log.sms_text.length > 80 ? log.sms_text.slice(0, 80) + '...' : log.sms_text}
+                        </span>
+                      </td>
+                      <td className="text-xs text-warm-muted">
+                        {new Date(log.created_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
+      </div>
     </div>
   )
 }

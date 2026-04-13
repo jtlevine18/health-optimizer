@@ -17,6 +17,7 @@ Endpoints:
 - GET  /api/extracted-data      -- Normalized data after extraction
 - GET  /api/reconciled-data     -- Reconciled data with conflict log
 - GET  /api/model-info          -- XGBoost metrics, feature importances
+- GET  /api/delivery-logs       -- SMS delivery logs
 - GET  /api/pipeline/runs       -- Run history
 - GET  /api/pipeline/stats      -- Aggregate stats
 - POST /api/pipeline/trigger    -- Manual pipeline run
@@ -1145,6 +1146,13 @@ def retrain_mos():
     thread = threading.Thread(target=_run_retrain, daemon=True)
     thread.start()
     return {"status": "triggered", "message": "MOS retrain started in background"}
+
+
+@app.get("/api/delivery-logs")
+def get_delivery_logs(limit: int = Query(default=50)):
+    from src.db import get_delivery_logs as fetch_logs
+    logs = fetch_logs(limit=limit)
+    return {"delivery_logs": logs, "total": len(logs)}
 
 
 @app.get("/api/db/health")

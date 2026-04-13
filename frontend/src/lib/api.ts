@@ -182,6 +182,25 @@ export interface ModelInfoResponse {
   }
 }
 
+// ── Delivery log types ──────────────────────────────────────────────────────
+
+export interface DeliveryLog {
+  farmer_id: string
+  farmer_name: string
+  phone: string
+  channel: string
+  sms_text: string
+  sms_text_local: string
+  status: string
+  error: string | null
+  created_at: string
+}
+
+export interface DeliveryLogsResponse {
+  delivery_logs: DeliveryLog[]
+  total: number
+}
+
 // ── Pipeline types ───────────────────────────────────────────────────────────
 
 export interface PipelineStep {
@@ -288,6 +307,14 @@ export function useModelInfo() {
   return useQuery<ModelInfoResponse>({
     queryKey: ['model-info'],
     queryFn: () => fetchJson('/api/model-info'),
+    staleTime: STALE_5MIN,
+  })
+}
+
+export function useDeliveryLogs() {
+  return useQuery<DeliveryLogsResponse>({
+    queryKey: ['delivery-logs'],
+    queryFn: () => fetchJson('/api/delivery-logs'),
     staleTime: STALE_5MIN,
   })
 }

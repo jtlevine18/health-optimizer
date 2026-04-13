@@ -1,7 +1,7 @@
 """
 Post-Harvest Market Intelligence -- Main Pipeline Orchestrator
 
-6-step pipeline: INGEST -> EXTRACT -> RECONCILE -> FORECAST -> OPTIMIZE -> RECOMMEND
+7-step pipeline: INGEST -> EXTRACT -> RECONCILE -> FORECAST -> OPTIMIZE -> RECOMMEND -> DELIVER
 
 Each step has independent fallbacks -- no cascading failures.
 Follows a common StepResult/PipelineRunResult pattern.
@@ -39,6 +39,7 @@ from src.forecasting.price_model import (
 )
 from src.optimizer import optimize_sell, recommendation_to_dict, SellRecommendation, assess_credit_readiness, credit_readiness_to_dict
 from src.recommendation_agent import RecommendationAgent, FarmerRecommendation
+from src.delivery import deliver_recommendations
 from src.store import store
 from src import db as persistence
 
@@ -83,6 +84,7 @@ class MarketIntelligencePipeline:
     Step 4 (FORECAST):   Predict prices at 7/14/30 day horizons
     Step 5 (OPTIMIZE):   Compute sell options for sample farmer locations
     Step 6 (RECOMMEND):  Generate Claude-powered sell recommendations in English + Tamil
+    Step 7 (DELIVER):    Deliver sell recommendations via SMS (dry-run by default)
     """
 
     def __init__(
@@ -171,6 +173,10 @@ class MarketIntelligencePipeline:
         step6 = await _run_step("recommend", self._step_recommend(run_id))
         steps.append(step6)
         total_cost += step6.details.get("cost_usd", 0)
+
+        # Step 7: DELIVER
+        step7 = await _run_step("deliver", self._step_deliver(run_id))
+        steps.append(step7)
 
         result = self._finalize(run_id, started_at, steps, total_cost=total_cost)
 
@@ -658,6 +664,64 @@ class MarketIntelligencePipeline:
             logger.exception("Recommendation step failed: %s", e)
             return StepResult(
                 step="recommend", status="failed", duration_s=time.time() - t0,
+                errors=[str(e)],
+            )
+
+    # ── Step 7: DELIVER ──────────────────────────────────────────────────
+
+    async def _step_deliver(self, run_id: str) -> StepResult:
+        """Deliver sell recommendations to farmers via SMS (dry-run by default)."""
+        t0 = time.time()
+
+        try:
+            # Build recommendation list from pipeline state
+            recommendations = list(self._sell_recommendations.values())
+            if not recommendations:
+                return StepResult(
+                    step="deliver", status="skipped", duration_s=time.time() - t0,
+                    errors=["No sell recommendations to deliver"],
+                )
+
+            # Build farmer dicts for the delivery module
+            farmers = [
+                {
+                    "farmer_id": f.farmer_id,
+                    "name": f.name,
+                    "phone": getattr(f, "phone", "+910000000000"),
+                    "language": getattr(f, "language", "ta"),
+                }
+                for f in SAMPLE_FARMERS
+            ]
+
+            logs = await deliver_recommendations(
+                recommendations=recommendations,
+                farmers=farmers,
+                live_delivery=False,
+            )
+
+            # Persist delivery logs to Neon
+            try:
+                persistence.save_delivery_logs(None, run_id, logs)
+            except Exception:
+                logger.warning("Failed to persist delivery logs -- continuing")
+
+            sent = sum(1 for l in logs if l["status"] in ("sent", "dry_run"))
+            failed = sum(1 for l in logs if l["status"] == "failed")
+
+            return StepResult(
+                step="deliver", status="ok" if failed == 0 else "partial",
+                duration_s=time.time() - t0,
+                records_processed=len(logs),
+                details={
+                    "deliveries_sent": sent,
+                    "deliveries_failed": failed,
+                    "channel": "console",
+                },
+            )
+        except Exception as e:
+            logger.exception("Delivery step failed: %s", e)
+            return StepResult(
+                step="deliver", status="failed", duration_s=time.time() - t0,
                 errors=[str(e)],
             )
 

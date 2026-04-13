@@ -12,6 +12,7 @@ Tables:
     sell_recommendations -- optimal sell options per farmer
     agent_traces         -- Claude agent tool call traces
     model_metrics        -- ML model evaluation metrics per run
+    delivery_logs        -- SMS delivery logs per pipeline run
 """
 
 from __future__ import annotations
@@ -137,6 +138,22 @@ class ModelMetric(Base):
     metric_name = Column(String(50), nullable=False)
     metric_value = Column(Float, nullable=False)
     extra_data = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class DeliveryLog(Base):
+    __tablename__ = "delivery_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(64), nullable=False, index=True)
+    farmer_id = Column(Text, nullable=False)
+    farmer_name = Column(Text)
+    phone = Column(Text)
+    channel = Column(String(20), default="console")
+    sms_text = Column(Text)
+    sms_text_local = Column(Text)
+    status = Column(String(20), default="dry_run")
+    error = Column(Text)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
@@ -317,6 +334,78 @@ def get_recent_runs(limit: int = 20) -> list[dict]:
         ]
     except Exception:
         log.exception("Failed to fetch pipeline runs")
+        return []
+    finally:
+        session.close()
+
+
+def save_delivery_logs(engine, run_id: str, logs: list[dict]) -> bool:
+    """Bulk insert delivery log entries for a pipeline run."""
+    if engine is None:
+        engine = get_engine()
+    if engine is None:
+        return False
+
+    session_factory = sessionmaker(bind=engine)
+    session = session_factory()
+    try:
+        for entry in logs:
+            session.add(DeliveryLog(
+                run_id=run_id,
+                farmer_id=entry.get("farmer_id", ""),
+                farmer_name=entry.get("farmer_name"),
+                phone=entry.get("phone"),
+                channel=entry.get("channel", "console"),
+                sms_text=entry.get("sms_text"),
+                sms_text_local=entry.get("sms_text_local"),
+                status=entry.get("status", "dry_run"),
+                error=entry.get("error"),
+            ))
+        session.commit()
+        log.info("Saved %d delivery logs for run %s", len(logs), run_id)
+        return True
+    except Exception:
+        session.rollback()
+        log.exception("Failed to save delivery logs")
+        return False
+    finally:
+        session.close()
+
+
+def get_delivery_logs(engine=None, limit: int = 50) -> list[dict]:
+    """Fetch recent delivery logs from the database."""
+    if engine is None:
+        engine = get_engine()
+    if engine is None:
+        return []
+
+    session_factory = sessionmaker(bind=engine)
+    session = session_factory()
+    try:
+        rows = (
+            session.query(DeliveryLog)
+            .order_by(DeliveryLog.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": r.id,
+                "run_id": r.run_id,
+                "farmer_id": r.farmer_id,
+                "farmer_name": r.farmer_name,
+                "phone": r.phone,
+                "channel": r.channel,
+                "sms_text": r.sms_text,
+                "sms_text_local": r.sms_text_local,
+                "status": r.status,
+                "error": r.error,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+    except Exception:
+        log.exception("Failed to fetch delivery logs")
         return []
     finally:
         session.close()
