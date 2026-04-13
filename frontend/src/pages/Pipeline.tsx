@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import MetricCard from '../components/MetricCard'
 import StatusBadge from '../components/StatusBadge'
 import { LoadingSpinner, ErrorState } from '../components/LoadingState'
-import { usePipelineStats, usePipelineRuns, useModelInfo } from '../lib/api'
+import { usePipelineStats, usePipelineRuns } from '../lib/api'
 
 // ── Pipeline Architecture ────────────────────────────────────────────────────
 
@@ -114,70 +114,26 @@ function ArchitectureDiagram() {
   )
 }
 
-// ── Cost Breakdown Component ─────────────────────────────────────────────────
-
-function CostBreakdown() {
-  const costs = [
-    { component: 'Agmarknet scraping', cost: 0, note: 'Free government data' },
-    { component: 'eNAM scraping', cost: 0, note: 'Free government data' },
-    { component: 'AI: Data extraction', cost: 0.04, note: 'Parsing 15 mandi reports' },
-    { component: 'AI: Price reconciliation', cost: 0.06, note: 'Resolving conflicts across sources' },
-    { component: 'AI: Sell recommendations', cost: 0.05, note: 'Generating personalized advice' },
-    { component: 'XGBoost forecasting', cost: 0, note: 'Local model inference' },
-    { component: 'Haversine + drive time estimation', cost: 0, note: 'Distance and route calculations' },
-    { component: 'Backend server', cost: 0, note: 'Cloud hosting (free tier)' },
-  ]
-  const total = costs.reduce((s, c) => s + c.cost, 0)
-
-  return (
-    <div className="bg-white border border-warm-border rounded-lg overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-warm-header-bg">
-            <th className="text-left px-4 py-2 text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider">Component</th>
-            <th className="text-right px-4 py-2 text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider">Cost/Run</th>
-            <th className="text-left px-4 py-2 text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider">Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          {costs.map((c) => (
-            <tr key={c.component} className="border-t border-warm-border/50">
-              <td className="px-4 py-2 font-medium text-[#1a1a1a]">{c.component}</td>
-              <td className="px-4 py-2 text-right font-mono text-xs">
-                {c.cost === 0 ? (
-                  <span className="text-success font-semibold">Free</span>
-                ) : (
-                  `$${c.cost.toFixed(2)}`
-                )}
-              </td>
-              <td className="px-4 py-2 text-warm-muted text-xs">{c.note}</td>
-            </tr>
-          ))}
-          <tr className="border-t-2 border-warm-border bg-warm-header-bg">
-            <td className="px-4 py-2 font-bold text-[#1a1a1a]">Total per pipeline run</td>
-            <td className="px-4 py-2 text-right font-mono font-bold text-[#1a1a1a]">${total.toFixed(2)}</td>
-            <td className="px-4 py-2 text-warm-muted text-xs font-semibold">~$5/month at daily runs</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
 // ── Main Pipeline Page ───────────────────────────────────────────────────────
 
 export default function Pipeline() {
   const stats = usePipelineStats()
   const runs = usePipelineRuns()
-  const modelInfo = useModelInfo()
   const [expandedRun, setExpandedRun] = useState<string | null>(null)
-  const [tab, setTab] = useState<'architecture' | 'runs' | 'stats'>('architecture')
+  const [tab, setTab] = useState<'architecture' | 'runs' | 'build'>('architecture')
+  const [marketCount, setMarketCount] = useState(15)
+  const [runsPerWeek, setRunsPerWeek] = useState(1)
+  const [claudeModel, setClaudeModel] = useState<'sonnet' | 'haiku'>('sonnet')
   const [triggering, setTriggering] = useState(false)
 
   if (stats.isLoading) return <LoadingSpinner />
   if (stats.isError) return <ErrorState onRetry={() => stats.refetch()} />
 
   const s = stats.data
+
+  const claudeCostPerMarket = claudeModel === 'sonnet' ? 0.01 : 0.0008
+  const perRunCost = marketCount * claudeCostPerMarket + 0.02
+  const monthlyCost = perRunCost * runsPerWeek * 4.33
 
   async function handleTrigger() {
     setTriggering(true)
@@ -220,13 +176,13 @@ export default function Pipeline() {
 
       {/* Tabs */}
       <div className="tab-list mb-6">
-        {(['architecture', 'runs', 'stats'] as const).map((t) => (
+        {(['architecture', 'runs', 'build'] as const).map((t) => (
           <button
             key={t}
             className={`tab-item ${tab === t ? 'active' : ''}`}
             onClick={() => setTab(t)}
           >
-            {t === 'architecture' ? 'System Design' : t === 'runs' ? 'Run History' : 'Cost & Model'}
+            {t === 'architecture' ? 'Architecture' : t === 'runs' ? 'Run History' : 'Build Your Own'}
           </button>
         ))}
       </div>
@@ -366,121 +322,177 @@ export default function Pipeline() {
         </div>
       )}
 
-      {/* Stats Tab */}
-      {tab === 'stats' && (
-        <div className="animate-tab-enter space-y-8">
-          <div>
-            <div className="section-header">Cost Breakdown</div>
-            <CostBreakdown />
+      {/* Build Your Own Tab */}
+      {tab === 'build' && (
+        <div className="animate-tab-enter space-y-6">
+          <div className="section-header">Build Your Own</div>
+
+          <div className="card card-body">
+            <p style={{ fontSize: '0.88rem', color: '#1a1a1a', lineHeight: 1.7 }}>
+              Want to run this for your own region? Fork the{' '}
+              <a href="https://github.com/jtlevine18/market-intelligence" target="_blank" rel="noopener" style={{ color: '#0d7377', fontWeight: 600 }}>GitHub repo</a>,
+              fill in the prompt below with your markets and data source, then paste it into{' '}
+              <a href="https://claude.ai/code" target="_blank" rel="noopener" style={{ color: '#0d7377', fontWeight: 600 }}>Claude Code</a>.
+              It adapts the full pipeline — price scraping, reconciliation, forecasting, sell optimization, and farmer recommendations — for your geography.
+            </p>
           </div>
 
-          {/* Model info */}
+          {/* Full adaptation prompt with copy button */}
           <div>
-            <div className="section-header">Price Forecasting Model</div>
-            {modelInfo.isLoading ? (
-              <LoadingSpinner message="Loading model info..." />
-            ) : modelInfo.isError ? (
-              <ErrorState onRetry={() => modelInfo.refetch()} />
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className="text-xs font-sans font-semibold px-3 py-1 rounded-full"
-                    style={{ backgroundColor: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}
-                  >
-                    Chronos-2
-                  </span>
-                  <span className="text-xs text-warm-muted font-sans">{'\u2192'}</span>
-                  <span
-                    className="text-xs font-sans font-semibold px-3 py-1 rounded-full"
-                    style={{ backgroundColor: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}
-                  >
-                    XGBoost MOS
-                  </span>
-                  {modelInfo.data?.model_metrics?.features && (
-                    <span
-                      className="text-xs font-sans font-semibold px-3 py-1 rounded-full"
-                      style={{ backgroundColor: '#f0f9ff', color: '#0c4a6e', border: '1px solid #7dd3fc' }}
-                    >
-                      {modelInfo.data.model_metrics.features.length} Features
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-warm-body mt-2 mb-0 leading-relaxed" style={{ maxWidth: 600 }}>
-                  Chronos-2 generates probabilistic forecasts with native confidence intervals. XGBoost corrects for local mandi bias.
-                </p>
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => {
+                  const el = document.getElementById('rebuild-prompt')
+                  if (el) {
+                    navigator.clipboard.writeText(el.textContent ?? '').then(() => {
+                      const btn = document.getElementById('copy-btn')
+                      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy prompt' }, 2000) }
+                    })
+                  }
+                }}
+                id="copy-btn"
+                style={{
+                  position: 'sticky', top: '8px', float: 'right', zIndex: 1,
+                  background: '#0d7377', color: '#fff', border: 'none', borderRadius: '6px',
+                  padding: '8px 18px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'DM Sans, sans-serif', letterSpacing: '0.3px',
+                  marginRight: '10px', marginTop: '10px',
+                }}
+              >
+                Copy prompt
+              </button>
+              <pre id="rebuild-prompt" style={{
+                background: '#1a1a1a', color: '#e0dcd5', borderRadius: '8px',
+                padding: '20px', fontSize: '0.78rem', lineHeight: 1.65,
+                overflow: 'auto', whiteSpace: 'pre-wrap', maxHeight: '600px',
+              }}>
+{`I forked https://github.com/jtlevine18/market-intelligence — an AI crop pricing agent for smallholder farmers. I want to adapt it for my region. Read CLAUDE.md to understand the full architecture, then make all the changes below.
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <MetricCard
-                    label="Avg Error (RMSE)"
-                    value={modelInfo.data?.model_metrics?.rmse?.toFixed(1) ?? '--'}
-                    subtitle="typical prediction miss"
-                  />
-                  <MetricCard
-                    label="Avg Deviation (MAE)"
-                    value={modelInfo.data?.model_metrics?.mae?.toFixed(1) ?? '--'}
-                    subtitle="average absolute error"
-                  />
-                  <MetricCard
-                    label="Accuracy (R\u00b2)"
-                    value={modelInfo.data?.model_metrics?.r2 ? `${(modelInfo.data.model_metrics.r2 * 100).toFixed(1)}%` : '--'}
-                    subtitle="variance explained"
-                  />
-                  <MetricCard
-                    label="Training Samples"
-                    value={modelInfo.data?.model_metrics?.train_samples?.toLocaleString() ?? '--'}
-                    subtitle="historical price records"
-                  />
-                </div>
+=== MY REGION ===
 
-                {/* Feature importances */}
-                {modelInfo.data?.model_metrics?.feature_importances && (
-                  <div className="card card-body">
-                    <h3 className="text-sm font-semibold font-sans text-[#1a1a1a] mb-3">
-                      What Drives the Forecast
-                    </h3>
-                    <div className="space-y-2">
-                      {Object.entries(modelInfo.data.model_metrics.feature_importances)
-                        .sort(([, a], [, b]) => b - a)
-                        .slice(0, 10)
-                        .map(([feature, importance]) => (
-                          <div key={feature} className="flex items-center gap-3">
-                            <span className="text-xs text-warm-body w-36 shrink-0 capitalize">
-                              {feature.replace(/_/g, ' ')}
-                            </span>
-                            <div className="flex-1 h-2 bg-warm-header-bg rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full"
-                                style={{
-                                  width: `${Math.round(importance * 100)}%`,
-                                  backgroundColor: '#0d7377',
-                                }}
-                              />
-                            </div>
-                            <span className="text-xs text-warm-muted w-10 text-right">
-                              {Math.round(importance * 100)}%
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
+Region name: [e.g. "Central Kenya", "West Bengal", "Northern Ghana"]
+Country: [e.g. "Kenya", "India", "Ghana"]
+Currency: [symbol] [code] (e.g. "KSh" KES, "₹" INR, "₵" GHS)
+Price unit: [e.g. "90kg bag", "quintal", "50kg bag"]
+Language(s) for recommendations: [e.g. "sw" for Kiswahili, "bn" for Bengali]
 
-                {/* Data sources */}
-                {s?.data_sources && s.data_sources.length > 0 && (
-                  <div className="card card-body">
-                    <h3 className="text-sm font-semibold font-sans text-[#1a1a1a] mb-2">
-                      Data Sources
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {s.data_sources.map((src) => (
-                        <span key={src} className="badge-amber text-[0.7rem]">{src}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+=== MY MARKETS (5-20) ===
+
+1. [Market name], district: [District], lat: [XX.XX], lon: [XX.XX], commodities: [crop1, crop2, crop3]
+2. [Market name], district: [District], lat: [XX.XX], lon: [XX.XX], commodities: [crop1, crop2, crop3]
+... (add more)
+
+=== MY COMMODITIES ===
+
+1. [Name], category: [cereal/pulse/oilseed/spice/vegetable/fruit], harvest months: [M1, M2], aliases: [local names]
+2. [Name], category: [cereal/pulse/oilseed/spice/vegetable/fruit], harvest months: [M1, M2], aliases: [local names]
+... (add more)
+
+=== MY PRICE DATA SOURCE ===
+
+[Describe your data source:
+- "I have an API at [endpoint] that returns [format]"
+- "I have CSV files with columns [list columns]"
+- "I want to scrape [government website URL]"
+- "I'll use synthetic data for now, just set up the pipeline structure"]
+
+=== WHAT TO CHANGE ===
+
+Make ALL of the following changes. This is a 6-step pipeline that scrapes prices, extracts structured data, reconciles conflicting sources, forecasts prices, optimizes sell timing, and generates farmer recommendations. The reference implementation covers Tamil Nadu, India. You are adapting it for my region.
+
+--- 1. MARKETS & COMMODITIES (config layer) ---
+
+Create markets.json and commodities.json in the project root. Update config.py to load from these JSON files instead of hardcoded Tamil Nadu data. Create farmers.json with sample farmer personas.
+
+--- 2. DATA INGESTION (src/ingestion/) ---
+
+Write a new price source implementing PriceSource from src/ingestion/base.py for my data source. If using CSV: use CSVSource with my columns. If only one source: reconciliation becomes validation against seasonal norms and neighboring markets.
+
+--- 3. EXTRACTION (src/extraction/agent.py) ---
+
+Update COMMODITY_ALIASES dict with my commodity names and all variations. Update the Claude system prompt to reference my region.
+
+--- 4. RECONCILIATION (src/reconciliation/agent.py) ---
+
+Update Claude system prompt to reference my data sources instead of Agmarknet/eNAM.
+
+--- 5. KNOWLEDGE BASE (src/rag/knowledge_base.py) ---
+
+Rewrite all chunks with: crop calendars for my region, government support prices, market regulations and fees, transport corridors and costs, post-harvest handling practices, storage infrastructure.
+
+--- 6. RECOMMENDATIONS (src/recommendation_agent.py) ---
+
+Update Claude system prompt and translation language for my region.
+
+--- 7. DASHBOARD (frontend/src/regionConfig.ts) ---
+
+Update region name, country, currency, languages, map center, market labels, sidebar title, and tour narrative.
+
+--- 8. TOUR (frontend/src/lib/tour.ts) ---
+
+Rewrite the guided tour with a farmer in my region growing my crops.
+
+--- 9. VERIFICATION ---
+
+Run: python3 -m uvicorn src.api:app --port 7860
+If it fails, debug and fix. Common issues: missing DATABASE_URL, missing API keys, commodity name mismatches.
+
+=== WHAT NOT TO CHANGE ===
+
+These are globally portable: src/pipeline.py, src/forecasting/price_model.py, src/forecasting/chronos_model.py, src/optimizer.py, src/rag/provider.py, src/store.py, src/ingestion/nasa_power.py, src/ingestion/base.py, all frontend pages, src/lib/api.ts`}
+              </pre>
+            </div>
+          </div>
+
+          {/* Cost Calculator */}
+          <div>
+            <div className="section-header">Cost Calculator</div>
+            <div style={{
+              background: '#fff', border: '1px solid #e0dcd5', borderRadius: '8px',
+              padding: '20px',
+            }}>
+              <p style={{ fontSize: '0.82rem', color: '#666', marginBottom: '16px' }}>
+                Estimate the running cost for your deployment based on market count, run frequency, and Claude model choice.
+              </p>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '20px' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Markets</span>
+                  <input type="number" min={1} max={100} step={5} value={marketCount}
+                    onChange={e => setMarketCount(Math.max(1, Math.min(100, Number(e.target.value))))}
+                    className="input" style={{ width: '90px' }} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Runs/week</span>
+                  <input type="number" min={1} max={28} step={1} value={runsPerWeek}
+                    onChange={e => setRunsPerWeek(Math.max(1, Math.min(28, Number(e.target.value))))}
+                    className="input" style={{ width: '90px' }} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Claude model</span>
+                  <select value={claudeModel} onChange={e => setClaudeModel(e.target.value as 'sonnet' | 'haiku')}
+                    className="input">
+                    <option value="sonnet">Sonnet (~$3/M tokens)</option>
+                    <option value="haiku">Haiku (~$0.25/M tokens)</option>
+                  </select>
+                </label>
               </div>
-            )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div style={{ background: '#faf8f5', border: '1px solid #e0dcd5', borderRadius: '8px', padding: '16px' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '6px' }}>Per-Run Cost</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0d7377' }}>~${perRunCost.toFixed(2)}</div>
+                  <div style={{ color: '#666', fontSize: '0.82rem', marginTop: '4px' }}>
+                    Claude: ~${(perRunCost - 0.02).toFixed(2)} + Compute: ~$0.02
+                  </div>
+                </div>
+                <div style={{ background: '#faf8f5', border: '1px solid #e0dcd5', borderRadius: '8px', padding: '16px' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '6px' }}>Monthly Estimate</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0d7377' }}>~${monthlyCost.toFixed(2)}/mo</div>
+                  <div style={{ color: '#666', fontSize: '0.82rem', marginTop: '4px' }}>
+                    {runsPerWeek}x/week {'\u00D7'} 4.33 weeks {'\u00D7'} ${perRunCost.toFixed(2)}/run
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
