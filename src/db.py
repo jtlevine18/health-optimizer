@@ -154,7 +154,7 @@ class DeliveryLog(Base):
     sms_text_local = Column(Text)
     status = Column(String(20), default="dry_run")
     error = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
 
 def get_engine():
@@ -339,15 +339,11 @@ def get_recent_runs(limit: int = 20) -> list[dict]:
         session.close()
 
 
-def save_delivery_logs(engine, run_id: str, logs: list[dict]) -> bool:
+def save_delivery_logs(run_id: str, logs: list[dict]) -> bool:
     """Bulk insert delivery log entries for a pipeline run."""
-    if engine is None:
-        engine = get_engine()
-    if engine is None:
+    session = get_session()
+    if session is None:
         return False
-
-    session_factory = sessionmaker(bind=engine)
-    session = session_factory()
     try:
         for entry in logs:
             session.add(DeliveryLog(
@@ -372,15 +368,11 @@ def save_delivery_logs(engine, run_id: str, logs: list[dict]) -> bool:
         session.close()
 
 
-def get_delivery_logs(engine=None, limit: int = 50) -> list[dict]:
+def get_delivery_logs(limit: int = 50) -> list[dict]:
     """Fetch recent delivery logs from the database."""
-    if engine is None:
-        engine = get_engine()
-    if engine is None:
+    session = get_session()
+    if session is None:
         return []
-
-    session_factory = sessionmaker(bind=engine)
-    session = session_factory()
     try:
         rows = (
             session.query(DeliveryLog)

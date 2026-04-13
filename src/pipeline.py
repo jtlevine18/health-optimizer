@@ -701,7 +701,7 @@ class MarketIntelligencePipeline:
 
             # Persist delivery logs to Neon
             try:
-                persistence.save_delivery_logs(None, run_id, logs)
+                persistence.save_delivery_logs(run_id, logs)
             except Exception:
                 logger.warning("Failed to persist delivery logs -- continuing")
 
