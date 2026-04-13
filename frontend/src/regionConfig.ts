@@ -37,7 +37,7 @@ export const REGION = {
   marketLabelPlural: 'mandis',
 
   /** Sidebar branding */
-  sidebarTitle: 'TAMIL NADU MANDIS',
+  sidebarTitle: 'POST-HARVEST INTELLIGENCE',
   sidebarFooter: 'Tamil Nadu Agricultural Markets',
 
   /** Map defaults */

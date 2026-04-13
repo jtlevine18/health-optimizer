@@ -35,7 +35,7 @@ export default function Sidebar() {
               Market Agent
             </h1>
             <p className="text-[10px] text-[#e0dcd5] font-sans font-medium uppercase tracking-wider m-0">
-              TAMIL NADU MANDIS
+              Post-Harvest Intelligence
             </p>
           </div>
         </NavLink>
