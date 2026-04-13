@@ -121,20 +121,17 @@ export default function MarketPrices() {
   return (
     <div className="animate-slide-up">
       {/* Hero */}
-      <div data-tour="hero" className="pt-2 pb-6">
-        <h1 className="page-title">Market Prices</h1>
-        <p className="page-caption">
-          Reconciled prices across {mandisMonitored || 15} Tamil Nadu mandis
-        </p>
-      </div>
-
-      {/* ── Hook callout ─────────────────────────────────────────────────── */}
-      <div data-tour="callout" className="mb-10 p-6 rounded-xl border-l-4" style={{ borderColor: '#0d7377', background: 'rgba(13, 115, 119, 0.04)' }}>
-        <h2 className="text-xl font-bold text-slate-900" style={{ fontFamily: 'Source Serif 4, serif' }}>
-          Two government databases. Different prices. Same market.
-        </h2>
-        <p className="text-slate-600 mt-2 leading-relaxed">
-          India's Agmarknet and eNAM report wholesale prices for the same commodities at the same mandis — and disagree 5–12% of the time. No existing tool reconciles them. Farmers trust whichever middleman they ask. This tool investigates the gap.
+      <div data-tour="hero" className="pb-6">
+        <h1 className="font-sans font-bold text-[#1a1a1a] text-[1.65rem] leading-tight tracking-tight m-0">
+          Crop Pricing Agent<br />
+          <span className="text-warm-muted font-normal">
+            for Smallholder Farmers in Tamil Nadu
+          </span>
+        </h1>
+        <p className="text-warm-muted-light text-[0.86rem] leading-relaxed mt-1.5 font-sans">
+          Two government databases track the same prices at the same markets — and regularly disagree.
+          This tool investigates every discrepancy, forecasts where prices are headed, and computes the best
+          market and timing across {mandisMonitored || 15} mandis.
         </p>
       </div>
 

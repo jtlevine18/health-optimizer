@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import {
+  Home,
   Store,
   TrendingUp,
   IndianRupee,
@@ -8,7 +9,7 @@ import {
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Markets', icon: Store, tourId: 'nav-home' },
+  { to: '/', label: 'Home', icon: Home, tourId: 'nav-home' },
   { to: '/forecast', label: 'Forecast', icon: TrendingUp, tourId: 'nav-forecast' },
   { to: '/sell', label: 'Sell Advisor', icon: IndianRupee, tourId: 'nav-sell' },
   { to: '/pipeline', label: 'How It Works', icon: Settings, tourId: 'nav-pipeline' },
