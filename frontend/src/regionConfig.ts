@@ -1,5 +1,5 @@
 /**
- * Region configuration for Market Intelligence Agent.
+ * Region configuration for Crop Pricing Agent.
  *
  * All geography-specific strings and settings live here.
  * When adapting this project for a new region, this is one of the
@@ -37,7 +37,7 @@ export const REGION = {
   marketLabelPlural: 'mandis',
 
   /** Sidebar branding */
-  sidebarTitle: 'POST-HARVEST INTELLIGENCE',
+  sidebarTitle: 'AGENT',
   sidebarFooter: 'Tamil Nadu Agricultural Markets',
 
   /** Map defaults */

@@ -32,10 +32,10 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="text-sm font-bold text-white leading-tight font-serif m-0">
-              Market Agent
+              Crop Pricing
             </h1>
             <p className="text-[10px] text-[#e0dcd5] font-sans font-medium uppercase tracking-wider m-0">
-              Post-Harvest Intelligence
+              Agent
             </p>
           </div>
         </NavLink>
