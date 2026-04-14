@@ -292,39 +292,50 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
   }
 
   if (outputType === 'recommendation') {
-    const rec = (recommendations.data?.sell_recommendations ?? []).find(
-      (r) => r.recommendation_tamil && r.recommendation_text,
-    )
+    const recs = recommendations.data?.sell_recommendations ?? []
+    const rec =
+      recs.find((r) => r.recommendation_tamil && r.recommendation_text) ??
+      recs.find((r) => r.recommendation_text || r.recommendation_tamil) ??
+      recs[0]
     if (!rec) return <div style={panelStyle}>Loading…</div>
+    const hasTamil = Boolean(rec.recommendation_tamil)
     return (
       <div style={panelStyle}>
         <div className="eyebrow" style={{ marginBottom: '10px' }}>
-          Recommendation · {rec.farmer_name} · Tamil
+          Recommendation · {rec.farmer_name}{hasTamil ? ' · Tamil' : ''}
         </div>
-        <p
-          style={{
-            fontFamily: '"Noto Serif Tamil", "Source Serif 4", Georgia, serif',
-            fontSize: '12px',
-            lineHeight: 1.5,
-            color: '#1b1e2d',
-            marginBottom: '4px',
-            maxWidth: '520px',
-          }}
-        >
-          {rec.recommendation_tamil}
-        </p>
-        <p
-          style={{
-            fontFamily: '"Space Grotesk", system-ui, sans-serif',
-            fontSize: '11px',
-            color: '#606373',
-            lineHeight: 1.5,
-            marginBottom: 0,
-            maxWidth: '520px',
-          }}
-        >
-          {rec.recommendation_text}
-        </p>
+        {hasTamil && (
+          <p
+            style={{
+              fontFamily: '"Noto Serif Tamil", "Source Serif 4", Georgia, serif',
+              fontSize: '12px',
+              lineHeight: 1.5,
+              color: '#1b1e2d',
+              marginBottom: '4px',
+              maxWidth: '100%',
+              overflowWrap: 'break-word',
+              wordBreak: 'break-word',
+            }}
+          >
+            {rec.recommendation_tamil}
+          </p>
+        )}
+        {rec.recommendation_text && (
+          <p
+            style={{
+              fontFamily: '"Space Grotesk", system-ui, sans-serif',
+              fontSize: '11px',
+              color: '#606373',
+              lineHeight: 1.5,
+              marginBottom: 0,
+              maxWidth: '100%',
+              overflowWrap: 'break-word',
+              wordBreak: 'break-word',
+            }}
+          >
+            {rec.recommendation_text}
+          </p>
+        )}
         <ExploreLink to="/sell" label="→ See farmer recommendations" />
       </div>
     )
