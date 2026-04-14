@@ -6,16 +6,16 @@ export const tourSteps: Step[] = [
     target: '[data-tour="hero"]',
     title: 'Lakshmi grows rice in Thanjavur',
     content:
-      'She harvests in September. Three mandis within 40km, each quoting a different price. ' +
+      'She harvests in September. Three markets within 40km, each quoting a different price. ' +
       'She sells at the nearest one for whatever the middleman offers \u2014 and loses 15\u201330% of what her rice is actually worth. ' +
-      'This tool does what a broker would: tells her which market, which day, and at what net price after transport and fees.',
+      'An AI agent acts as her broker: it tells her which market, which day, and the net price after transport and fees.',
     placement: 'bottom',
     disableBeacon: true,
   },
   // ── Step 2: Live data (/) ──
   {
     target: '[data-tour="metrics"]',
-    title: '15 real mandis. 10 commodities. Updated daily.',
+    title: '15 real markets. 10 commodities. Refreshed every week.',
     content:
       'These are real regulated markets from Thanjavur to Tirunelveli, with prices from the actual Agmarknet API. ' +
       'The \u2018Conflicts\u2019 count shows how many prices the two government databases disagreed on \u2014 ' +
@@ -23,14 +23,14 @@ export const tourSteps: Step[] = [
     placement: 'top',
     disableBeacon: true,
   },
-  // ── Step 3: Price table (/) ──
+  // ── Step 3: Market network (/) ──
   {
-    target: '[data-tour="price-table"]',
-    title: 'Every price has a story',
+    target: '[data-tour="market-network"]',
+    title: 'Fifteen live markets, side by side',
     content:
-      'Green means above seasonal average \u2014 good time to sell. Red means below. ' +
-      'Hover over any cell to see both source prices and how they were reconciled. ' +
-      'The confidence score tells you how much to trust the number.',
+      'Each pin is a regulated wholesale market pulling fresh prices every week. ' +
+      'Green pins mark markets where the two government databases disagreed on this week\u2019s prices \u2014 ' +
+      'conflicts the AI investigated and resolved. The Data page shows every reconciled price with its confidence score.',
     placement: 'top',
     disableBeacon: true,
   },
@@ -61,9 +61,9 @@ export const tourSteps: Step[] = [
     target: '[data-tour="sell-title"]',
     title: 'The full calculation',
     content:
-      'Kumbakonam offers \u20b9150/quintal more than Thanjavur. But it\u2019s 30km away. Transport costs \u20b980. ' +
-      'Storage at Thanjavur for two weeks loses \u20b945 to spoilage. ' +
-      'The optimizer computes every combination and finds the one that puts the most money in Lakshmi\u2019s pocket.',
+      'Kumbakonam pays \u20b9150/quintal more than Thanjavur \u2014 but it\u2019s 30 km away, and transport costs \u20b980. ' +
+      'Storing at Thanjavur for two weeks loses another \u20b945 to spoilage. ' +
+      'The advisor works out every combination and finds the one that puts the most money in Lakshmi\u2019s pocket.',
     placement: 'bottom',
     disableBeacon: true,
   },
@@ -72,7 +72,7 @@ export const tourSteps: Step[] = [
     target: '[data-tour="waterfall"]',
     title: 'Net price, not market price',
     content:
-      'Market price minus transport, minus storage loss, minus mandi fees equals net price. ' +
+      'Market price minus transport, minus storage loss, minus market vendor fees equals net price. ' +
       'That\u2019s the number that matters. The middleman knows this math. Now Lakshmi does too.',
     placement: 'top',
     disableBeacon: true,
@@ -82,7 +82,7 @@ export const tourSteps: Step[] = [
     target: '[data-tour="credit-readiness"]',
     title: 'Should she borrow for next season?',
     content:
-      'Based on her expected harvest revenue, the tool assesses whether an input loan makes sense \u2014 ' +
+      'Based on her expected harvest revenue, the agent gives her honest advice on whether an input loan makes sense \u2014 ' +
       'and caps it at 40% of expected revenue. Green means strong. Amber means proceed with caution. Red means wait.',
     placement: 'top',
     disableBeacon: true,
@@ -103,7 +103,7 @@ export const tourSteps: Step[] = [
 export const stepRoutes: Record<number, string> = {
   0: '/',         // hero
   1: '/',         // metrics
-  2: '/',         // price table
+  2: '/',         // market network
   3: '/forecast', // forecast title
   4: '/forecast', // forecast metrics
   5: '/sell',     // sell title
@@ -115,16 +115,16 @@ export const stepRoutes: Record<number, string> = {
 export const tourStyles = {
   options: {
     zIndex: 10000,
-    arrowColor: '#1a1a1a',
-    backgroundColor: '#1a1a1a',
-    primaryColor: '#0d7377',
-    textColor: '#e0dcd5',
+    arrowColor: '#1b1e2d',
+    backgroundColor: '#1b1e2d',
+    primaryColor: '#446b26',
+    textColor: '#e8e5e1',
     overlayColor: 'rgba(0, 0, 0, 0.45)',
   },
   tooltip: {
     borderRadius: 10,
     padding: '20px 22px',
-    maxWidth: 380,
+    maxWidth: 400,
     fontFamily: '"DM Sans", system-ui, sans-serif',
     fontSize: '0.88rem',
     lineHeight: 1.6,
@@ -133,14 +133,14 @@ export const tourStyles = {
     fontFamily: '"Source Serif 4", Georgia, serif',
     fontWeight: 700,
     fontSize: '1.05rem',
-    color: '#0d7377',
+    color: '#446b26',
     marginBottom: 8,
   },
   tooltipContent: {
     padding: '8px 0 0',
   },
   buttonNext: {
-    backgroundColor: '#0d7377',
+    backgroundColor: '#446b26',
     color: '#fff',
     borderRadius: 6,
     fontFamily: '"DM Sans", system-ui, sans-serif',

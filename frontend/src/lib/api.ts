@@ -1,11 +1,25 @@
 import { useQuery } from '@tanstack/react-query'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? ''
+// Local fixtures — no backend wiring. Every React Query hook in this file
+// resolves against these fixtures via a small simulated network delay so the
+// UI renders with populated content.
+import {
+  mandisResponse,
+  marketPricesResponse,
+  priceForecastsResponse,
+  sellRecommendationsResponse,
+  priceConflictsResponse,
+  rawInputsResponse,
+  extractedDataResponse,
+  reconciledDataResponse,
+  modelInfoResponse,
+  deliveryLogsResponse,
+  pipelineRunsResponse,
+  pipelineStatsResponse,
+} from './mockData'
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`)
-  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`)
-  return res.json() as Promise<T>
+function mock<T>(value: T, delayMs = 260): Promise<T> {
+  return new Promise((resolve) => setTimeout(() => resolve(value), delayMs))
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -20,12 +34,17 @@ export interface Mandi {
   enam_integrated: boolean
   reporting_quality: string
   commodities_traded: string[]
-  last_updated: string
+  // Real backend fields (present in static api/mandis.ts and HF Space `src/api.py`):
+  state?: string
+  avg_daily_arrivals_tonnes?: number
+  // Only populated by the offline mock fixture — real backend does not return this.
+  last_updated?: string
 }
 
 export interface MandisResponse {
   mandis: Mandi[]
   total: number
+  source?: string
 }
 
 export interface MarketPrice {
@@ -33,7 +52,6 @@ export interface MarketPrice {
   mandi_name: string
   commodity_id: string
   commodity_name: string
-  category: string
   price_rs: number
   agmarknet_price_rs: number | null
   enam_price_rs: number | null
@@ -41,11 +59,17 @@ export interface MarketPrice {
   confidence: number
   price_trend: string
   date: string
+  // Present when backend spreads `full_data` JSONB (pipeline-authored rows);
+  // absent from the older-row fallback in api/market-prices.ts.
+  category?: string
+  source_used?: string
+  reasoning?: string
 }
 
 export interface MarketPricesResponse {
   market_prices: MarketPrice[]
   total: number
+  source?: string
 }
 
 export interface PriceForecast {
@@ -53,24 +77,32 @@ export interface PriceForecast {
   mandi_name: string
   commodity_id: string
   commodity_name: string
-  current_price_rs: number
-  price_7d: number
-  price_14d: number
-  price_30d: number
-  ci_lower_7d: number
-  ci_upper_7d: number
-  ci_lower_14d: number
-  ci_upper_14d: number
-  ci_lower_30d: number
-  ci_upper_30d: number
+  // Backend api/price-forecast.ts initialises these to `null` and only fills
+  // 7d/14d/30d when the corresponding horizon row exists in Neon.
+  current_price_rs: number | null
+  price_7d: number | null
+  price_14d: number | null
+  price_30d: number | null
+  ci_lower_7d: number | null
+  ci_upper_7d: number | null
+  // Backend api/price-forecast.ts only produces 7d CI bands. 14d/30d bands
+  // exist in the Python `PriceForecast` dataclass but are not surfaced through
+  // the `price_forecasts` SELECT. Mock fixture provides them; real API will
+  // leave them undefined.
+  ci_lower_14d?: number
+  ci_upper_14d?: number
+  ci_lower_30d?: number
+  ci_upper_30d?: number
   direction: string
   confidence: number
-  seasonal_index: number
+  // Mock-only; not returned by backend.
+  seasonal_index?: number
 }
 
 export interface PriceForecastsResponse {
   price_forecasts: PriceForecast[]
   total: number
+  source?: string
 }
 
 export interface SellOption {
@@ -83,8 +115,12 @@ export interface SellOption {
   mandi_fee_rs: number
   net_price_rs: number
   distance_km: number
-  drive_time_min: number
-  confidence: number
+  // Python `recommendation_to_dict` emits `confidence` and `price_source`
+  // but does NOT emit `drive_time_min`. Older fallback rows in
+  // api/sell-recommendations.ts also drop `confidence`.
+  drive_time_min?: number
+  confidence?: number
+  price_source?: string
 }
 
 export interface CreditReadiness {
@@ -98,9 +134,18 @@ export interface CreditReadiness {
   risks: string[]
   advice_en: string
   advice_ta: string
+  // KCC / DPI extras from Python `credit_readiness_to_dict` — absent in mock.
+  kcc_limit_rs?: number | null
+  kcc_outstanding_rs?: number | null
+  kcc_headroom_rs?: number | null
+  kcc_repayment_status?: string | null
+  dpi_checked?: boolean
 }
 
 export interface SellRecommendation {
+  // Fallback branch of api/sell-recommendations.ts emits `farmer_id`; newer
+  // `full_data` rows include it too.
+  farmer_id?: string
   farmer_name: string
   commodity_id: string
   commodity_name: string
@@ -112,12 +157,14 @@ export interface SellRecommendation {
   potential_gain_rs: number
   recommendation_text: string
   recommendation_tamil: string
-  credit_readiness?: CreditReadiness
+  // Backend explicitly returns `null` (not undefined) from the fallback path.
+  credit_readiness?: CreditReadiness | null
 }
 
 export interface SellRecommendationsResponse {
   sell_recommendations: SellRecommendation[]
   total: number
+  source?: string
 }
 
 export interface InvestigationStep {
@@ -136,12 +183,16 @@ export interface PriceConflict {
   resolution: string
   reconciled_price: number
   reasoning: string
-  investigation_steps?: InvestigationStep[]
+  // api/price-conflicts.ts adds this alongside `investigation_steps` when
+  // enriching raw JSONB conflicts from pipeline_runs.
+  confidence?: number
+  investigation_steps?: InvestigationStep[] | null
 }
 
 export interface PriceConflictsResponse {
   price_conflicts: PriceConflict[]
   total: number
+  source?: string
 }
 
 // ── Raw / Extracted / Reconciled responses ────────────────────────────────────
@@ -167,19 +218,26 @@ export interface ReconciledDataResponse {
 export interface ModelInfoResponse {
   model_metrics: {
     model_type: string
-    rmse?: number
-    mae?: number
-    r2?: number
+    // Backend api/model-info.ts returns these as literal `null` when the
+    // static stub has no values. Once the port wires real metrics from Neon
+    // they'll be numbers, but the type must tolerate `null` today.
+    rmse?: number | null
+    mae?: number | null
+    r2?: number | null
+    directional_accuracy?: number | null
+    train_samples?: number | null
+    test_samples?: number | null
     features?: string[]
     feature_importances?: Record<string, number>
-    train_samples?: number
-    test_samples?: number
   }
+  // Mock-only; backend api/model-info.ts does not emit this block. Kept as
+  // optional so pages can render a Claude/Chronos stack summary when present.
   ml_stack?: {
     primary_model: { type: string; features: number; metrics: Record<string, number> }
     agents: Record<string, string>
     [key: string]: unknown
   }
+  source?: string
 }
 
 // ── Delivery log types ──────────────────────────────────────────────────────
@@ -203,10 +261,16 @@ export interface DeliveryLogsResponse {
 
 // ── Pipeline types ───────────────────────────────────────────────────────────
 
+export interface PipelineStepDetails {
+  data_source_mode?: 'live' | 'demo'
+  [key: string]: unknown
+}
+
 export interface PipelineStep {
   step: string
   status: string
   duration_s: number
+  details?: PipelineStepDetails
 }
 
 export interface PipelineRun {
@@ -217,11 +281,17 @@ export interface PipelineRun {
   duration_s: number
   steps: PipelineStep[]
   total_cost_usd: number
+  // Extra columns surfaced by api/pipeline-runs.ts; mock fixture omits them.
+  mandis_processed?: number
+  commodities_tracked?: number
 }
 
 export interface PipelineRunsResponse {
   runs: PipelineRun[]
-  total: number
+  // Backend api/pipeline-runs.ts does NOT return `total` — it only emits
+  // `{ runs, source }`. Kept optional so the mock can still populate it.
+  total?: number
+  source?: string
 }
 
 export interface PipelineStats {
@@ -233,6 +303,10 @@ export interface PipelineStats {
   total_cost_usd: number
   last_run: string | null
   data_sources: string[]
+  // Additional fields returned by api/pipeline-stats.ts.
+  successful_runs?: number
+  avg_cost_per_run_usd?: number
+  source?: string
 }
 
 // ── Query hooks ──────────────────────────────────────────────────────────────
@@ -242,7 +316,7 @@ const STALE_5MIN = 5 * 60 * 1000
 export function useMandis() {
   return useQuery<MandisResponse>({
     queryKey: ['mandis'],
-    queryFn: () => fetchJson('/api/mandis'),
+    queryFn: () => mock(mandisResponse),
     staleTime: STALE_5MIN,
   })
 }
@@ -250,7 +324,7 @@ export function useMandis() {
 export function useMarketPrices() {
   return useQuery<MarketPricesResponse>({
     queryKey: ['market-prices'],
-    queryFn: () => fetchJson('/api/market-prices'),
+    queryFn: () => mock(marketPricesResponse, 320),
     staleTime: STALE_5MIN,
   })
 }
@@ -258,7 +332,7 @@ export function useMarketPrices() {
 export function usePriceForecasts() {
   return useQuery<PriceForecastsResponse>({
     queryKey: ['price-forecast'],
-    queryFn: () => fetchJson('/api/price-forecast'),
+    queryFn: () => mock(priceForecastsResponse, 300),
     staleTime: STALE_5MIN,
   })
 }
@@ -266,7 +340,7 @@ export function usePriceForecasts() {
 export function useSellRecommendations() {
   return useQuery<SellRecommendationsResponse>({
     queryKey: ['sell-recommendations'],
-    queryFn: () => fetchJson('/api/sell-recommendations'),
+    queryFn: () => mock(sellRecommendationsResponse, 340),
     staleTime: STALE_5MIN,
   })
 }
@@ -274,7 +348,7 @@ export function useSellRecommendations() {
 export function usePriceConflicts() {
   return useQuery<PriceConflictsResponse>({
     queryKey: ['price-conflicts'],
-    queryFn: () => fetchJson('/api/price-conflicts'),
+    queryFn: () => mock(priceConflictsResponse, 240),
     staleTime: STALE_5MIN,
   })
 }
@@ -282,7 +356,7 @@ export function usePriceConflicts() {
 export function useRawInputs() {
   return useQuery<RawInputsResponse>({
     queryKey: ['raw-inputs'],
-    queryFn: () => fetchJson('/api/raw-inputs'),
+    queryFn: () => mock(rawInputsResponse, 220),
     staleTime: STALE_5MIN,
   })
 }
@@ -290,7 +364,7 @@ export function useRawInputs() {
 export function useExtractedData() {
   return useQuery<ExtractedDataResponse>({
     queryKey: ['extracted-data'],
-    queryFn: () => fetchJson('/api/extracted-data'),
+    queryFn: () => mock(extractedDataResponse, 240),
     staleTime: STALE_5MIN,
   })
 }
@@ -298,7 +372,7 @@ export function useExtractedData() {
 export function useReconciledData() {
   return useQuery<ReconciledDataResponse>({
     queryKey: ['reconciled-data'],
-    queryFn: () => fetchJson('/api/reconciled-data'),
+    queryFn: () => mock(reconciledDataResponse, 260),
     staleTime: STALE_5MIN,
   })
 }
@@ -306,7 +380,7 @@ export function useReconciledData() {
 export function useModelInfo() {
   return useQuery<ModelInfoResponse>({
     queryKey: ['model-info'],
-    queryFn: () => fetchJson('/api/model-info'),
+    queryFn: () => mock(modelInfoResponse, 220),
     staleTime: STALE_5MIN,
   })
 }
@@ -314,7 +388,7 @@ export function useModelInfo() {
 export function useDeliveryLogs() {
   return useQuery<DeliveryLogsResponse>({
     queryKey: ['delivery-logs'],
-    queryFn: () => fetchJson('/api/delivery-logs'),
+    queryFn: () => mock(deliveryLogsResponse, 260),
     staleTime: STALE_5MIN,
   })
 }
@@ -322,7 +396,7 @@ export function useDeliveryLogs() {
 export function usePipelineRuns() {
   return useQuery<PipelineRunsResponse>({
     queryKey: ['pipeline-runs'],
-    queryFn: () => fetchJson('/api/pipeline/runs'),
+    queryFn: () => mock(pipelineRunsResponse, 300),
     staleTime: STALE_5MIN,
   })
 }
@@ -330,7 +404,7 @@ export function usePipelineRuns() {
 export function usePipelineStats() {
   return useQuery<PipelineStats>({
     queryKey: ['pipeline-stats'],
-    queryFn: () => fetchJson('/api/pipeline/stats'),
+    queryFn: () => mock(pipelineStatsResponse, 220),
     staleTime: STALE_5MIN,
   })
 }

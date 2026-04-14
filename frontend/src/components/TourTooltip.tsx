@@ -32,9 +32,9 @@ export default function TourTooltip({
       {/* Step counter */}
       <div
         style={{
-          color: '#666',
-          fontSize: '0.75rem',
-          fontFamily: '"DM Sans", system-ui, sans-serif',
+          color: '#8d909e',
+          fontSize: '12px',
+          fontFamily: '"Space Grotesk", system-ui, sans-serif',
           marginTop: 12,
         }}
       >

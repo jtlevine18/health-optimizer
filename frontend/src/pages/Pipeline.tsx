@@ -1,446 +1,9 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
-import MetricCard from '../components/MetricCard'
 import StatusBadge from '../components/StatusBadge'
 import { LoadingSpinner, ErrorState } from '../components/LoadingState'
 import { usePipelineStats, usePipelineRuns } from '../lib/api'
 
-// ── Pipeline Architecture ────────────────────────────────────────────────────
-
-const PIPELINE_STEPS = [
-  {
-    num: 1, name: 'Ingest', table: 'raw_inputs', color: '#2E7D32',
-    desc: 'Scrapes daily price reports from Agmarknet and eNAM government databases for all 15 monitored mandis across Tamil Nadu',
-    options: [
-      { label: 'Agmarknet Scraper', note: 'Government agricultural market prices, updated daily', active: true },
-      { label: 'eNAM Scraper', note: 'Electronic National Agriculture Market, online trading platform', active: true },
-      { label: 'Mandi Metadata', note: 'Market coordinates, trading hours, commodity lists', active: true },
-    ],
-  },
-  {
-    num: 2, name: 'Extract', table: 'extracted_data', color: '#7B1FA2',
-    desc: 'Parses raw HTML and PDF reports into structured price records: commodity, quantity, min/max/modal prices per mandi',
-    options: [
-      { label: 'AI-Powered', note: 'Handles inconsistent formats, missing fields, Hindi/Tamil text', active: true },
-      { label: 'Regex Fallback', note: 'Pattern matching for standard Agmarknet tabular format', active: false },
-    ],
-  },
-  {
-    num: 3, name: 'Reconcile', table: 'reconciled_data', color: '#1565C0',
-    desc: 'When Agmarknet and eNAM report different prices for the same mandi on the same day, the AI investigates and produces a single reconciled price with reasoning',
-    options: [
-      { label: 'AI Reconciliation', note: 'Compares sources, checks historical patterns, explains decisions', active: true },
-      { label: 'Weighted Average', note: 'Fallback: weight by source reliability score', active: false },
-    ],
-  },
-  {
-    num: 4, name: 'Forecast', table: 'price_forecasts', color: '#E65100',
-    desc: 'Chronos-2 foundation model generates probabilistic forecasts with native confidence intervals. XGBoost MOS corrects for local mandi bias using 15 features: seasonality, weather, arrival volumes, transport costs, and historical patterns',
-    options: [
-      { label: 'Chronos-2', note: 'Amazon foundation model for zero-shot probabilistic time-series forecasting', active: true },
-      { label: 'XGBoost MOS', note: 'Model Output Statistics: bias-corrects Chronos predictions using local mandi features', active: true },
-      { label: 'Seasonal Patterns', note: 'Harvest cycles, festival demand, monsoon effects', active: true },
-      { label: 'Confidence Intervals', note: 'Probabilistic bounds from Chronos quantile predictions', active: true },
-    ],
-  },
-  {
-    num: 5, name: 'Optimize', table: 'sell_options', color: '#C62828',
-    desc: 'For each farmer, computes all (mandi, timing) combinations, accounting for transport costs, storage losses, mandi fees, and distance',
-    options: [
-      { label: 'Route Optimization', note: 'Haversine + drive time estimation', active: true },
-      { label: 'Cost Model', note: 'Transport, storage decay, commission fees per mandi', active: true },
-    ],
-  },
-  {
-    num: 6, name: 'Recommend', table: 'recommendations', color: '#0d7377',
-    desc: 'Generates personalized sell advice for each farmer in English and Tamil, explaining which mandi, when to sell, and why \u2014 backed by a full cost breakdown',
-    options: [
-      { label: 'AI-Generated Advice', note: 'Natural language recommendations with reasoning', active: true },
-      { label: 'Tamil Translation', note: 'Bilingual output for farmer accessibility', active: true },
-    ],
-  },
-  {
-    num: 7, name: 'Deliver', table: 'delivery_logs', color: '#d4a019',
-    desc: 'Sends personalized sell advice to each farmer by SMS in English and Tamil, with Twilio dry-run mode by default',
-    options: [
-      { label: 'Console (Dry Run)', note: 'Logs SMS text to pipeline output for testing', active: true },
-      { label: 'Twilio SMS', note: 'Live delivery to farmer phones when credentials are configured' },
-    ],
-  },
-]
-
-// ── Architecture Diagram Component ───────────────────────────────────────────
-
-function ArchitectureDiagram() {
-  return (
-    <div className="flex flex-col gap-0 pl-5">
-      {PIPELINE_STEPS.map((s, i) => (
-        <div key={s.num}>
-          <div className="flex items-start gap-3.5">
-            <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 mt-0.5"
-              style={{ background: s.color }}
-            >
-              {s.num}
-            </div>
-            <div className="flex-1 bg-white border border-warm-border rounded-lg p-3.5">
-              <div className="flex items-center gap-2.5 flex-wrap mb-1">
-                <span className="font-bold text-sm" style={{ color: s.color }}>{s.name}</span>
-                <code className="bg-warm-header-bg px-2 py-0.5 rounded text-[0.72rem] text-warm-body">
-                  {s.table}
-                </code>
-              </div>
-              <p className="text-xs text-warm-muted m-0 mb-2">{s.desc}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {s.options.map((opt) => (
-                  <span
-                    key={opt.label}
-                    className="text-[0.7rem] px-2 py-0.5 rounded-md border"
-                    style={{
-                      background: opt.active ? `${s.color}12` : '#f8f7f4',
-                      color: opt.active ? s.color : '#999',
-                      borderColor: opt.active ? `${s.color}44` : '#e0dcd5',
-                      fontWeight: opt.active ? 600 : 400,
-                    }}
-                    title={opt.note}
-                  >
-                    {opt.label}
-                    {opt.active && ' \u25CF'}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-          {i < PIPELINE_STEPS.length - 1 && (
-            <div className="flex items-center pl-[18px] py-0">
-              <div className="w-[2px] h-5 bg-warm-border ml-[0px]" />
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── Main Pipeline Page ───────────────────────────────────────────────────────
-
-export default function Pipeline() {
-  const stats = usePipelineStats()
-  const runs = usePipelineRuns()
-  const [expandedRun, setExpandedRun] = useState<string | null>(null)
-  const [tab, setTab] = useState<'architecture' | 'runs' | 'build'>('architecture')
-  const [marketCount, setMarketCount] = useState(15)
-  const [runsPerWeek, setRunsPerWeek] = useState(1)
-  const [claudeModel, setClaudeModel] = useState<'sonnet' | 'haiku'>('sonnet')
-  const [triggering, setTriggering] = useState(false)
-  const [triggerError, setTriggerError] = useState<string | null>(null)
-
-  if (stats.isLoading) return <LoadingSpinner />
-  if (stats.isError) return <ErrorState onRetry={() => stats.refetch()} />
-
-  const s = stats.data
-
-  const claudeCostPerMarket = claudeModel === 'sonnet' ? 0.01 : 0.0008
-  const perRunCost = marketCount * claudeCostPerMarket + 0.02
-  const monthlyCost = perRunCost * runsPerWeek * 4.33
-
-  async function handleTrigger() {
-    setTriggering(true)
-    setTriggerError(null)
-    try {
-      const baseUrl = import.meta.env.VITE_API_URL ?? ''
-      const res = await fetch(`${baseUrl}/api/pipeline/trigger`, { method: 'POST' })
-      if (!res.ok) {
-        throw new Error(`Pipeline trigger failed: ${res.status} ${res.statusText}`)
-      }
-      runs.refetch()
-      stats.refetch()
-    } catch (err) {
-      setTriggerError(err instanceof Error ? err.message : 'Failed to trigger pipeline. Please try again.')
-    } finally {
-      setTriggering(false)
-    }
-  }
-
-  return (
-    <div className="animate-slide-up">
-      <div className="pt-2 pb-6">
-        <h1 className="page-title">How It Works</h1>
-        <p className="page-caption">
-          A look inside the system: what it does, how often it runs, and what it costs
-        </p>
-      </div>
-
-      {/* Metrics */}
-      <div className="mb-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-stagger">
-          <MetricCard
-            label="Pipeline Runs"
-            value={s?.total_runs}
-            subtitle={`${Math.round((s?.success_rate ?? 0) * 100)}% success`}
-          />
-          <MetricCard label="Mandis" value={s?.mandis_monitored} subtitle="monitored" />
-          <MetricCard label="Commodities" value={s?.commodities_tracked} subtitle="tracked" />
-          <MetricCard
-            label="Running Cost"
-            value={`$${s?.total_cost_usd?.toFixed(2) ?? '0'}`}
-            subtitle="total spend"
-          />
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="tab-list mb-6">
-        {(['architecture', 'runs', 'build'] as const).map((t) => (
-          <button
-            key={t}
-            className={`tab-item ${tab === t ? 'active' : ''}`}
-            onClick={() => setTab(t)}
-          >
-            {t === 'architecture' ? 'Architecture' : t === 'runs' ? 'Run History' : 'Build Your Own'}
-          </button>
-        ))}
-      </div>
-
-      {/* Architecture Tab */}
-      {tab === 'architecture' && (
-        <div className="animate-tab-enter space-y-6">
-          <div className="section-header">From Scraping to Sell Advice in 7 Steps</div>
-          <ArchitectureDiagram />
-
-          <div className="mt-8">
-            <div className="section-header">Data Sources & AI Capabilities</div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="card card-body">
-                <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider m-0 mb-1">Price Data</p>
-                <p className="text-sm font-bold text-[#1a1a1a] m-0">2 Government Sources</p>
-                <p className="text-xs text-warm-body m-0 mt-1">Agmarknet (national) and eNAM (electronic trading) \u2014 often conflicting.</p>
-              </div>
-              <div className="card card-body">
-                <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider m-0 mb-1">Markets</p>
-                <p className="text-sm font-bold text-[#1a1a1a] m-0">15 Tamil Nadu Mandis</p>
-                <p className="text-xs text-warm-body m-0 mt-1">Regulated agricultural markets across the state with daily price reporting.</p>
-              </div>
-              <div className="card card-body">
-                <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider m-0 mb-1">Forecasting</p>
-                <p className="text-sm font-bold text-[#1a1a1a] m-0">Chronos-2 + XGBoost MOS</p>
-                <p className="text-xs text-warm-body m-0 mt-1">Foundation model forecasts with local bias correction via 15 mandi-level features.</p>
-              </div>
-              <div className="card card-body">
-                <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider m-0 mb-1">AI Agents</p>
-                <p className="text-sm font-bold text-[#1a1a1a] m-0">3 Specialized Agents</p>
-                <p className="text-xs text-warm-body m-0 mt-1">Data extraction, price reconciliation, and sell recommendation generation.</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Pilot scaling cost tiers */}
-          <div className="mt-8">
-            <div className="section-header">What it costs to run at pilot scale</div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="card card-body" style={{ borderLeft: '3px solid #2a9d8f' }}>
-                <p className="text-xs font-sans font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#2a9d8f' }}>
-                  Current (live)
-                </p>
-                <p className="text-lg font-serif font-bold text-[#1a1a1a] m-0">~$0.16 / week</p>
-                <p className="text-xs text-warm-body m-0 mt-1">
-                  15 mandis scraped and reconciled. 3 featured farmers get precomputed sell advice.
-                </p>
-                <p className="text-xs text-warm-muted m-0 mt-2">
-                  Extract + Reconcile run once per mandi, shared across all farmers.
-                </p>
-              </div>
-              <div className="card card-body" style={{ borderLeft: '3px solid #1565C0' }}>
-                <p className="text-xs font-sans font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#1565C0' }}>
-                  Pilot (100 farmers)
-                </p>
-                <p className="text-lg font-serif font-bold text-[#1a1a1a] m-0">~$1.50 / week</p>
-                <p className="text-xs text-warm-body m-0 mt-1">
-                  One cooperative. Every farmer gets a personalized recommendation every weekly run.
-                </p>
-                <p className="text-xs text-warm-muted m-0 mt-2">
-                  Haiku handles Tamil translation; Sonnet handles reasoning.
-                </p>
-              </div>
-              <div className="card card-body" style={{ borderLeft: '3px solid #d4a019' }}>
-                <p className="text-xs font-sans font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#d4a019' }}>
-                  State-wide (10K farmers)
-                </p>
-                <p className="text-lg font-serif font-bold text-[#1a1a1a] m-0">~$30 / week</p>
-                <p className="text-xs text-warm-body m-0 mt-1">
-                  Tamil Nadu block extension network. 100x the farmers; ~20x the cost because scraping stays fixed.
-                </p>
-                <p className="text-xs text-warm-muted m-0 mt-2">
-                  Data scraping and forecasting cost don't move with farmer count.
-                </p>
-              </div>
-            </div>
-            <p className="text-xs text-warm-muted mt-3 italic">
-              The registry already holds 100 farmers across all 15 mandis. Weekly runs precompute only featured farmers — the rest compute on demand.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Runs Tab */}
-      {tab === 'runs' && (
-        <div className="animate-tab-enter space-y-6">
-          {/* Scheduler + trigger */}
-          <div className="card card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-sans text-warm-body m-0">
-                  <span className="font-semibold text-[#1a1a1a]">Last run: </span>
-                  {s?.last_run ? new Date(s.last_run).toLocaleString() : 'Never'}
-                </p>
-                <p className="text-xs text-warm-muted m-0 mt-1">
-                  Scheduled daily at 06:00 IST. Scrapes both sources and regenerates all forecasts.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <StatusBadge status={s?.last_run ? 'active' : 'pending'} />
-                <button
-                  className="btn-primary text-xs"
-                  onClick={handleTrigger}
-                  disabled={triggering}
-                >
-                  {triggering ? 'Running...' : 'Run Now'}
-                </button>
-              </div>
-            </div>
-            {triggerError && (
-              <div
-                role="alert"
-                className="mt-3 text-xs font-sans px-3 py-2 rounded-md"
-                style={{
-                  color: '#b32434',
-                  background: 'rgba(230, 57, 70, 0.08)',
-                  border: '1px solid rgba(230, 57, 70, 0.25)',
-                }}
-              >
-                {triggerError}
-              </div>
-            )}
-          </div>
-
-          {/* Run history */}
-          {runs.isLoading ? (
-            <LoadingSpinner message="Loading runs..." />
-          ) : runs.isError ? (
-            <ErrorState onRetry={() => runs.refetch()} />
-          ) : (
-            <div className="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th className="w-8"></th>
-                    <th>Run ID</th>
-                    <th>Started</th>
-                    <th>Status</th>
-                    <th>Duration</th>
-                    <th>Steps</th>
-                    <th>Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {runs.data?.runs.map((run) => (
-                    <>
-                      <tr
-                        key={run.run_id}
-                        className="cursor-pointer"
-                        onClick={() => setExpandedRun(expandedRun === run.run_id ? null : run.run_id)}
-                      >
-                        <td>
-                          {expandedRun === run.run_id
-                            ? <ChevronDown size={14} className="text-warm-muted" />
-                            : <ChevronRight size={14} className="text-warm-muted" />}
-                        </td>
-                        <td className="font-mono text-xs">{run.run_id}</td>
-                        <td>{new Date(run.started_at).toLocaleString()}</td>
-                        <td><StatusBadge status={run.status} /></td>
-                        <td>{run.duration_s.toFixed(1)}s</td>
-                        <td>{run.steps.length}</td>
-                        <td>${run.total_cost_usd.toFixed(4)}</td>
-                      </tr>
-                      {expandedRun === run.run_id && (
-                        <tr key={`${run.run_id}-detail`}>
-                          <td colSpan={7} className="bg-warm-header-bg !p-0">
-                            <div className="px-8 py-4">
-                              <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider mb-3">
-                                Step Details
-                              </p>
-                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                {run.steps.map((step, i) => (
-                                  <div
-                                    key={i}
-                                    className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-warm-border"
-                                  >
-                                    <span className="text-xs font-sans font-medium text-[#1a1a1a]">{step.step}</span>
-                                    <div className="flex items-center gap-2">
-                                      <StatusBadge status={step.status} />
-                                      <span className="text-xs text-warm-muted">{step.duration_s.toFixed(1)}s</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Build Your Own Tab */}
-      {tab === 'build' && (
-        <div className="animate-tab-enter space-y-6">
-          <div className="section-header">Build Your Own</div>
-
-          <div className="card card-body">
-            <p style={{ fontSize: '0.88rem', color: '#1a1a1a', lineHeight: 1.7 }}>
-              Want to run this for your own region? Fork the{' '}
-              <a href="https://github.com/jtlevine18/market-intelligence" target="_blank" rel="noopener" style={{ color: '#0d7377', fontWeight: 600 }}>GitHub repo</a>,
-              fill in the prompt below with your markets and data source, then paste it into{' '}
-              <a href="https://claude.ai/code" target="_blank" rel="noopener" style={{ color: '#0d7377', fontWeight: 600 }}>Claude Code</a>.
-              It adapts the full pipeline — price scraping, reconciliation, forecasting, sell optimization, and farmer recommendations — for your geography.
-            </p>
-          </div>
-
-          {/* Full adaptation prompt with copy button */}
-          <div>
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => {
-                  const el = document.getElementById('rebuild-prompt')
-                  if (el) {
-                    navigator.clipboard.writeText(el.textContent ?? '').then(() => {
-                      const btn = document.getElementById('copy-btn')
-                      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy prompt' }, 2000) }
-                    })
-                  }
-                }}
-                id="copy-btn"
-                style={{
-                  position: 'sticky', top: '8px', float: 'right', zIndex: 1,
-                  background: '#0d7377', color: '#fff', border: 'none', borderRadius: '6px',
-                  padding: '8px 18px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
-                  fontFamily: 'DM Sans, sans-serif', letterSpacing: '0.3px',
-                  marginRight: '10px', marginTop: '10px',
-                }}
-              >
-                Copy prompt
-              </button>
-              <pre id="rebuild-prompt" style={{
-                background: '#1a1a1a', color: '#e0dcd5', borderRadius: '8px',
-                padding: '20px', fontSize: '0.78rem', lineHeight: 1.65,
-                overflow: 'auto', whiteSpace: 'pre-wrap', maxHeight: '600px',
-              }}>
-{`I forked https://github.com/jtlevine18/market-intelligence — an AI crop pricing agent for smallholder farmers. I want to adapt it for my region. Read CLAUDE.md to understand the full architecture, then make all the changes below.
+const REBUILD_PROMPT = `I forked https://github.com/jtlevine18/market-intelligence — an AI crop pricing agent for smallholder farmers. I want to adapt it for my region. Read CLAUDE.md to understand the full architecture, then make all the changes below.
 
 === MY REGION ===
 
@@ -472,7 +35,7 @@ Language(s) for recommendations: [e.g. "sw" for Kiswahili, "bn" for Bengali]
 
 === WHAT TO CHANGE ===
 
-Make ALL of the following changes. This is a 6-step pipeline that scrapes prices, extracts structured data, reconciles conflicting sources, forecasts prices, optimizes sell timing, and generates farmer recommendations. The reference implementation covers Tamil Nadu, India. You are adapting it for my region.
+Make ALL of the following changes. This is a pipeline that scrapes prices, reconciles conflicting sources, forecasts where they are headed, optimizes sell timing, and generates farmer recommendations in the local language. The reference implementation covers Tamil Nadu, India. You are adapting it for my region.
 
 --- 1. MARKETS & COMMODITIES (config layer) ---
 
@@ -517,60 +80,504 @@ If it fails, debug and fix. Common issues: missing DATABASE_URL, missing API key
 
 === WHAT NOT TO CHANGE ===
 
-These are globally portable: src/pipeline.py, src/forecasting/price_model.py, src/forecasting/chronos_model.py, src/optimizer.py, src/rag/provider.py, src/store.py, src/ingestion/nasa_power.py, src/ingestion/base.py, all frontend pages, src/lib/api.ts`}
-              </pre>
+These are globally portable: src/pipeline.py, src/forecasting/price_model.py, src/forecasting/chronos_model.py, src/optimizer.py, src/rag/provider.py, src/store.py, src/ingestion/nasa_power.py, src/ingestion/base.py, all frontend pages, src/lib/api.ts`
+
+const STACK = [
+  {
+    label: 'Data',
+    items: ['Agmarknet (data.gov.in)', 'eNAM', '15 regulated markets'],
+  },
+  {
+    label: 'Models',
+    items: ['Chronos-2 — Amazon\'s open time-series foundation model for forecasting', 'Claude Sonnet — reasoning agent that investigates price conflicts', 'Claude Haiku — writes sell advice in English and Tamil'],
+  },
+  {
+    label: 'Delivery',
+    items: ['Twilio SMS', 'Weekly, per-farmer', 'Tamil + English'],
+  },
+  {
+    label: 'Infrastructure',
+    items: ['Postgres on Neon', 'Hugging Face Spaces', 'GitHub Actions cron', 'Vercel frontend'],
+  },
+]
+
+function HowItWorksSection() {
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: '28px',
+          borderTop: '1px solid #e8e5e1',
+          paddingTop: '18px',
+        }}
+      >
+        {STACK.map((cat) => (
+          <div key={cat.label}>
+            <div className="eyebrow">{cat.label}</div>
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: '12px 0 0 0',
+                fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                fontSize: '13px',
+                lineHeight: 1.7,
+                color: '#606373',
+              }}
+            >
+              {cat.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Pipeline Page ───────────────────────────────────────────────────────
+
+export default function Pipeline() {
+  const stats = usePipelineStats()
+  const runs = usePipelineRuns()
+  const [expandedRun, setExpandedRun] = useState<string | null>(null)
+  const [tab, setTab] = useState<'runs' | 'cost' | 'build'>('runs')
+  const [marketCount, setMarketCount] = useState(15)
+  const [runsPerWeek, setRunsPerWeek] = useState(1)
+  const [claudeModel, setClaudeModel] = useState<'sonnet' | 'haiku'>('sonnet')
+  const [copied, setCopied] = useState(false)
+
+  function handleCopyPrompt() {
+    navigator.clipboard.writeText(REBUILD_PROMPT).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  if (stats.isLoading) return <LoadingSpinner />
+  if (stats.isError) return <ErrorState onRetry={() => stats.refetch()} />
+
+  const s = stats.data
+
+  const claudeCostPerMarket = claudeModel === 'sonnet' ? 0.01 : 0.0008
+  const perRunCost = marketCount * claudeCostPerMarket + 0.02
+  const monthlyCost = perRunCost * runsPerWeek * 4.33
+
+  return (
+    <div className="animate-slide-up">
+      <div style={{ marginBottom: '20px' }}>
+        <h2 className="page-title">How it works</h2>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event('relaunch-tour'))}
+          className="text-link"
+          style={{ marginTop: '12px' }}
+        >
+          Take the guided tour →
+        </button>
+      </div>
+
+      {/* How it works — the stack */}
+      <HowItWorksSection />
+
+      {/* Tabs */}
+      <div className="tab-list mb-8">
+        {(['runs', 'cost', 'build'] as const).map((t) => (
+          <button
+            key={t}
+            className={`tab-item ${tab === t ? 'active' : ''}`}
+            onClick={() => setTab(t)}
+          >
+            {t === 'runs' ? 'Run history' : t === 'cost' ? 'Cost & scale' : 'Build your own'}
+          </button>
+        ))}
+      </div>
+
+      {/* Runs Tab */}
+      {tab === 'runs' && (
+        <div className="animate-tab-enter space-y-10">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: '24px',
+            }}
+          >
+            <div>
+              <div className="eyebrow">Last run</div>
+              <p
+                style={{
+                  fontFamily: '"Source Serif 4", Georgia, serif',
+                  fontSize: '22px',
+                  color: '#1b1e2d',
+                  marginTop: '8px',
+                  marginBottom: '6px',
+                }}
+              >
+                {s?.last_run ? new Date(s.last_run).toLocaleString() : 'Never'}
+              </p>
+              <p
+                style={{
+                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                  fontSize: '13px',
+                  color: '#606373',
+                  maxWidth: '520px',
+                }}
+              >
+                Runs weekly. Scrapes both government sources and regenerates all forecasts.
+              </p>
+            </div>
+            <StatusBadge status={s?.last_run ? 'active' : 'pending'} />
+          </div>
+
+          {runs.isLoading ? (
+            <LoadingSpinner message="Loading runs" />
+          ) : runs.isError ? (
+            <ErrorState onRetry={() => runs.refetch()} />
+          ) : (
+            <div>
+              <div className="section-header">Run history</div>
+              <table className="etable">
+                <thead>
+                  <tr>
+                    <th>Run ID</th>
+                    <th>Started</th>
+                    <th>Status</th>
+                    <th className="num">Duration</th>
+                    <th className="num">Steps</th>
+                    <th className="num">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.data?.runs.map((run) => (
+                    <>
+                      <tr
+                        key={run.run_id}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setExpandedRun(expandedRun === run.run_id ? null : run.run_id)}
+                      >
+                        <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+                          {run.run_id.slice(0, 12)}
+                        </td>
+                        <td>{new Date(run.started_at).toLocaleString()}</td>
+                        <td><StatusBadge status={run.status} /></td>
+                        <td className="num">{run.duration_s.toFixed(1)}s</td>
+                        <td className="num">{run.steps.length}</td>
+                        <td className="num">${run.total_cost_usd.toFixed(4)}</td>
+                      </tr>
+                      {expandedRun === run.run_id && (
+                        <tr key={`${run.run_id}-detail`}>
+                          <td colSpan={6} style={{ background: '#fcfaf7', paddingTop: '16px', paddingBottom: '16px' }}>
+                            <div className="eyebrow" style={{ marginBottom: '12px' }}>Step details</div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              {run.steps.map((step, i) => (
+                                <div
+                                  key={i}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    borderLeft: '2px solid #e8e5e1',
+                                    paddingLeft: '12px',
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                                      fontSize: '13px',
+                                      color: '#1b1e2d',
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    {step.step}
+                                  </span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <StatusBadge status={step.status} />
+                                    <span
+                                      style={{
+                                        fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                                        fontSize: '12px',
+                                        color: '#8d909e',
+                                        fontVariantNumeric: 'tabular-nums',
+                                      }}
+                                    >
+                                      {step.duration_s.toFixed(1)}s
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cost & scale Tab */}
+      {tab === 'cost' && (
+        <div className="animate-tab-enter space-y-10">
+          <div>
+            <div className="section-header">What it costs to run at pilot scale</div>
+            <div
+              className="grid grid-cols-1 md:grid-cols-3"
+              style={{
+                gap: '32px',
+                borderTop: '1px solid #e8e5e1',
+                paddingTop: '24px',
+              }}
+            >
+              {[
+                {
+                  label: 'Current (live)',
+                  cost: '~$0.16 / week',
+                  note:
+                    'Fifteen markets scraped and reconciled. Three featured farmers get precomputed sell advice. Extract and reconcile run once per market, shared across all farmers.',
+                },
+                {
+                  label: 'Pilot (100 farmers)',
+                  cost: '~$1.50 / week',
+                  note:
+                    'One cooperative. Every farmer gets a personalized recommendation every weekly run. Haiku handles Tamil translation, Sonnet handles reasoning.',
+                },
+                {
+                  label: 'State-wide (10k farmers)',
+                  cost: '~$30 / week',
+                  note:
+                    'Tamil Nadu block extension network. A hundred times the farmers but roughly twenty times the cost, because scraping and forecasting stay fixed.',
+                },
+              ].map((tier) => (
+                <div key={tier.label}>
+                  <div className="eyebrow">{tier.label}</div>
+                  <p
+                    style={{
+                      fontFamily: '"Source Serif 4", Georgia, serif',
+                      fontSize: '28px',
+                      lineHeight: '36px',
+                      fontWeight: 400,
+                      color: '#1b1e2d',
+                      margin: '12px 0 8px 0',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {tier.cost}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                      fontSize: '13px',
+                      lineHeight: 1.65,
+                      color: '#606373',
+                      maxWidth: '280px',
+                    }}
+                  >
+                    {tier.note}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Cost Calculator */}
           <div>
-            <div className="section-header">Cost Calculator</div>
-            <div style={{
-              background: '#fff', border: '1px solid #e0dcd5', borderRadius: '8px',
-              padding: '20px',
-            }}>
-              <p style={{ fontSize: '0.82rem', color: '#666', marginBottom: '16px' }}>
+            <div className="section-header">Customize for your region</div>
+            <div
+              style={{
+                background: '#ffffff',
+                border: '1px solid #e8e5e1',
+                borderRadius: '4px',
+                padding: '20px',
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                  fontSize: '13px',
+                  color: '#606373',
+                  lineHeight: 1.6,
+                  marginBottom: '16px',
+                }}
+              >
                 Estimate the running cost for your deployment based on market count, run frequency, and Claude model choice.
               </p>
-              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '20px' }}>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Markets</span>
-                  <input type="number" min={1} max={100} step={5} value={marketCount}
-                    onChange={e => setMarketCount(Math.max(1, Math.min(100, Number(e.target.value))))}
-                    className="input" style={{ width: '90px' }} />
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '20px',
+                  flexWrap: 'wrap',
+                  marginBottom: '20px',
+                }}
+              >
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span className="eyebrow">Markets</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    step={5}
+                    value={marketCount}
+                    onChange={(e) =>
+                      setMarketCount(Math.max(1, Math.min(100, Number(e.target.value))))
+                    }
+                    className="input"
+                    style={{ width: '90px' }}
+                  />
                 </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Runs/week</span>
-                  <input type="number" min={1} max={28} step={1} value={runsPerWeek}
-                    onChange={e => setRunsPerWeek(Math.max(1, Math.min(28, Number(e.target.value))))}
-                    className="input" style={{ width: '90px' }} />
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span className="eyebrow">Runs / week</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={28}
+                    step={1}
+                    value={runsPerWeek}
+                    onChange={(e) =>
+                      setRunsPerWeek(Math.max(1, Math.min(28, Number(e.target.value))))
+                    }
+                    className="input"
+                    style={{ width: '90px' }}
+                  />
                 </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Claude model</span>
-                  <select value={claudeModel} onChange={e => setClaudeModel(e.target.value as 'sonnet' | 'haiku')}
-                    className="input">
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span className="eyebrow">Claude model</span>
+                  <select
+                    value={claudeModel}
+                    onChange={(e) => setClaudeModel(e.target.value as 'sonnet' | 'haiku')}
+                    className="input"
+                  >
                     <option value="sonnet">Sonnet (~$3/M tokens)</option>
                     <option value="haiku">Haiku (~$0.25/M tokens)</option>
                   </select>
                 </label>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div style={{ background: '#faf8f5', border: '1px solid #e0dcd5', borderRadius: '8px', padding: '16px' }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '6px' }}>Per-Run Cost</div>
-                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0d7377' }}>~${perRunCost.toFixed(2)}</div>
-                  <div style={{ color: '#666', fontSize: '0.82rem', marginTop: '4px' }}>
-                    Claude: ~${(perRunCost - 0.02).toFixed(2)} + Compute: ~$0.02
-                  </div>
+              <div
+                className="grid grid-cols-1 md:grid-cols-2"
+                style={{
+                  gap: '40px',
+                  borderTop: '1px solid #e8e5e1',
+                  paddingTop: '20px',
+                }}
+              >
+                <div>
+                  <div className="eyebrow">Per-run cost</div>
+                  <p className="metric-number" style={{ marginTop: '8px' }}>
+                    ${perRunCost.toFixed(2)}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                      fontSize: '13px',
+                      color: '#606373',
+                      marginTop: '6px',
+                    }}
+                  >
+                    Claude: ~${(perRunCost - 0.02).toFixed(2)} &middot; Compute: ~$0.02
+                  </p>
                 </div>
-                <div style={{ background: '#faf8f5', border: '1px solid #e0dcd5', borderRadius: '8px', padding: '16px' }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '6px' }}>Monthly Estimate</div>
-                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0d7377' }}>~${monthlyCost.toFixed(2)}/mo</div>
-                  <div style={{ color: '#666', fontSize: '0.82rem', marginTop: '4px' }}>
-                    {runsPerWeek}x/week {'\u00D7'} 4.33 weeks {'\u00D7'} ${perRunCost.toFixed(2)}/run
-                  </div>
+                <div>
+                  <div className="eyebrow">Monthly estimate</div>
+                  <p className="metric-number" style={{ marginTop: '8px' }}>
+                    ${monthlyCost.toFixed(2)}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                      fontSize: '13px',
+                      color: '#606373',
+                      marginTop: '6px',
+                    }}
+                  >
+                    {runsPerWeek}&times;/week &middot; 4.33 weeks &middot; ${perRunCost.toFixed(2)}/run
+                  </p>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Build Your Own Tab */}
+      {tab === 'build' && (
+        <div className="animate-tab-enter space-y-8">
+          <div>
+            <p
+              style={{
+                fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                fontSize: '14px',
+                lineHeight: 1.65,
+                color: '#1b1e2d',
+                maxWidth: '680px',
+              }}
+            >
+              Fork the{' '}
+              <a
+                href="https://github.com/jtlevine18/market-intelligence"
+                target="_blank"
+                rel="noopener"
+                className="text-link"
+              >
+                GitHub repo
+              </a>
+              , copy the prompt below, and paste it into{' '}
+              <a
+                href="https://claude.ai/code"
+                target="_blank"
+                rel="noopener"
+                className="text-link"
+              >
+                Claude Code
+              </a>
+              . It adapts the full pipeline &mdash; price scraping, reconciliation, forecasting, sell optimization, and farmer recommendations &mdash; for your geography.
+            </p>
+          </div>
+
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={handleCopyPrompt}
+              style={{
+                position: 'absolute',
+                top: '12px',
+                right: '12px',
+                zIndex: 1,
+                background: '#ffffff',
+                color: '#1b1e2d',
+                border: '1px solid #e8e5e1',
+                borderRadius: '4px',
+                padding: '6px 14px',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: '"Space Grotesk", system-ui, sans-serif',
+              }}
+            >
+              {copied ? 'Copied!' : 'Copy prompt'}
+            </button>
+            <pre
+              style={{
+                background: '#fcfaf7',
+                color: '#1b1e2d',
+                borderRadius: '4px',
+                border: '1px solid #e8e5e1',
+                padding: '20px',
+                fontSize: '12px',
+                lineHeight: 1.65,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                maxHeight: '420px',
+                fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                margin: 0,
+              }}
+            >
+              {REBUILD_PROMPT}
+            </pre>
           </div>
         </div>
       )}

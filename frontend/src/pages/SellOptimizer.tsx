@@ -1,26 +1,20 @@
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Polyline, Popup } from 'react-leaflet'
 import '../lib/leaflet-fix'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  LabelList,
-} from 'recharts'
-import { ChevronDown, ChevronRight } from 'lucide-react'
 import MetricCard from '../components/MetricCard'
 import { LoadingSpinner, ErrorState } from '../components/LoadingState'
-import { useSellRecommendations, useMandis, useDeliveryLogs, type SellRecommendation } from '../lib/api'
+import {
+  useSellRecommendations,
+  useMandis,
+  useDeliveryLogs,
+  type SellRecommendation,
+} from '../lib/api'
 import { formatRs } from '../lib/format'
 
 function netPriceColor(net: number, best: number): string {
-  if (net >= best * 0.95) return '#2a9d8f'
-  if (net >= best * 0.85) return '#0d7377'
-  return '#e63946'
+  if (net >= best * 0.95) return '#4a7c59'
+  if (net >= best * 0.85) return '#446b26'
+  return '#c71f48'
 }
 
 export default function SellOptimizer() {
@@ -33,7 +27,6 @@ export default function SellOptimizer() {
   const recs = recommendations.data?.sell_recommendations ?? []
   const allMandis = mandis.data?.mandis ?? []
 
-  // ── Mandi coordinate lookup ─────────────────────────────────────────────
   const mandiCoords = useMemo(() => {
     const m = new Map<string, [number, number]>()
     for (const mandi of allMandis) {
@@ -42,23 +35,27 @@ export default function SellOptimizer() {
     return m
   }, [allMandis])
 
-  // ── Aggregate metrics ───────────────────────────────────────────────────
   const metrics = useMemo(() => {
     if (!recs.length) return { farmers: 0, bestGain: 0, avgImprovement: 0, markets: 0 }
     const bestGain = Math.max(...recs.map((r) => r.potential_gain_rs))
-    const avgImprovement = recs.reduce((s, r) => {
-      const worst = Math.min(...r.all_options.map((o) => o.net_price_rs))
-      const best = r.best_option.net_price_rs
-      return s + (worst > 0 ? ((best - worst) / worst) * 100 : 0)
-    }, 0) / recs.length
+    const avgImprovement =
+      recs.reduce((s, r) => {
+        const worst = Math.min(...r.all_options.map((o) => o.net_price_rs))
+        const best = r.best_option.net_price_rs
+        return s + (worst > 0 ? ((best - worst) / worst) * 100 : 0)
+      }, 0) / recs.length
     const marketsSet = new Set<string>()
     recs.forEach((r) => r.all_options.forEach((o) => marketsSet.add(o.mandi_id)))
-    return { farmers: recs.length, bestGain, avgImprovement: Math.round(avgImprovement), markets: marketsSet.size }
+    return {
+      farmers: recs.length,
+      bestGain,
+      avgImprovement: Math.round(avgImprovement),
+      markets: marketsSet.size,
+    }
   }, [recs])
 
   const activeFarmer: SellRecommendation | null = recs[selectedFarmer] ?? null
 
-  // ── Sort options by net price descending ────────────────────────────────
   const sortedOptions = useMemo(() => {
     if (!activeFarmer) return []
     return [...activeFarmer.all_options].sort((a, b) => b.net_price_rs - a.net_price_rs)
@@ -71,44 +68,46 @@ export default function SellOptimizer() {
 
   return (
     <div className="animate-slide-up">
-      <div data-tour="sell-title" className="pt-2 pb-6">
-        <h1 className="page-title">Sell Advisor</h1>
-        <p className="page-caption">
-          Your AI broker finds the best deal
+      <div data-tour="sell-title" style={{ marginBottom: '20px' }}>
+        <h1 className="page-title">Sell recommendations</h1>
+        <p className="page-caption" style={{ maxWidth: '620px' }}>
+          For each enrolled farmer, the broker agent computes net price at every market and every sell date, subtracts transport and storage, and picks the best outcome.
         </p>
       </div>
 
-      {/* ── Metric cards ───────────────────────────────────────────────── */}
-      <div data-tour="sell-metrics" className="mb-8">
-        <div className="section-header">Overview</div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-stagger">
-          <MetricCard
-            label="Farmers Analyzed"
-            value={metrics.farmers}
-            subtitle="sample recommendations"
-          />
-          <MetricCard
-            label="Best Potential Gain"
-            value={formatRs(metrics.bestGain)}
-            subtitle="per quintal vs nearest"
-          />
-          <MetricCard
-            label="Avg Net Improvement"
-            value={`${metrics.avgImprovement}%`}
-            subtitle="best vs worst option"
-          />
-          <MetricCard
-            label="Markets Compared"
-            value={metrics.markets}
-            subtitle="mandis evaluated"
-          />
-        </div>
+      {/* ── KPI row ──────────────────────────────────────────────── */}
+      <div
+        data-tour="sell-metrics"
+        className="grid grid-cols-2 md:grid-cols-4 animate-stagger"
+        style={{
+          gap: '32px',
+          borderTop: '1px solid #e8e5e1',
+          paddingTop: '28px',
+          marginBottom: '56px',
+        }}
+      >
+        <MetricCard label="Farmers analyzed" value={metrics.farmers} subtitle="sample recommendations" />
+        <MetricCard
+          label="Best potential gain"
+          value={formatRs(metrics.bestGain)}
+          subtitle="per quintal vs nearest"
+        />
+        <MetricCard
+          label="Avg net improvement"
+          value={`${metrics.avgImprovement}%`}
+          subtitle="best vs worst option"
+        />
+        <MetricCard
+          label="Markets compared"
+          value={metrics.markets}
+          subtitle="markets evaluated"
+        />
       </div>
 
-      {/* ── Farmer cards ───────────────────────────────────────────────── */}
-      <div className="mb-8">
-        <div className="section-header">Farmer Recommendations</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* ── Farmer cards ───────────────────────────────────────── */}
+      <div style={{ marginBottom: '56px' }}>
+        <div className="section-header">Farmer recommendations</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
           {recs.map((rec, idx) => {
             const isActive = selectedFarmer === idx
             const isExpanded = expandedReasoning === idx
@@ -116,65 +115,98 @@ export default function SellOptimizer() {
             const gainVsNearest = nearest
               ? rec.best_option.net_price_rs - nearest.net_price_rs
               : rec.potential_gain_rs
-            const gainPct = nearest && nearest.net_price_rs > 0
-              ? Math.round((gainVsNearest / nearest.net_price_rs) * 100)
-              : 0
+            const gainPct =
+              nearest && nearest.net_price_rs > 0
+                ? Math.round((gainVsNearest / nearest.net_price_rs) * 100)
+                : 0
 
             return (
               <button
                 key={idx}
                 type="button"
                 aria-pressed={isActive}
-                className={`card-accent p-5 cursor-pointer text-left w-full bg-white border-0 font-sans ${isActive ? 'accent-amber' : 'accent-green'}`}
-                style={isActive ? { borderLeftWidth: 4 } : undefined}
                 onClick={() => setSelectedFarmer(idx)}
+                style={{
+                  textAlign: 'left',
+                  background: 'none',
+                  border: '1px solid #e8e5e1',
+                  borderLeft: isActive ? '2px solid #446b26' : '1px solid #e8e5e1',
+                  borderRadius: '4px',
+                  padding: '24px',
+                  cursor: 'pointer',
+                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                  marginRight: '-1px',
+                  marginBottom: '-1px',
+                }}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h3 className="text-base font-serif font-bold text-[#1a1a1a] m-0">
-                      {rec.farmer_name}
-                    </h3>
-                    <p className="text-xs text-warm-muted mt-0.5 m-0">
-                      {rec.commodity_name} &middot; {rec.quantity_quintals} quintals
-                    </p>
-                  </div>
-                </div>
+                <h3
+                  style={{
+                    fontFamily: '"Source Serif 4", "Noto Serif Tamil", Georgia, serif',
+                    fontSize: '20px',
+                    lineHeight: '26px',
+                    fontWeight: 400,
+                    color: '#1b1e2d',
+                    margin: 0,
+                  }}
+                >
+                  {rec.farmer_name}
+                </h3>
+                <p
+                  style={{
+                    fontSize: '12px',
+                    color: '#8d909e',
+                    margin: '4px 0 20px 0',
+                  }}
+                >
+                  {rec.commodity_name} &middot; {rec.quantity_quintals} quintals
+                </p>
 
-                {/* Best option */}
-                <div className="mt-3 p-3 rounded-lg" style={{ background: 'rgba(42,157,143,0.06)', border: '1px solid rgba(42,157,143,0.15)' }}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-warm-muted">Best option</span>
-                    <span className="text-xs font-semibold" style={{ color: '#2a9d8f' }}>
-                      {rec.best_option.mandi_name}
-                    </span>
+                <div
+                  style={{
+                    borderTop: '1px solid #e8e5e1',
+                    paddingTop: '14px',
+                    display: 'grid',
+                    rowGap: '6px',
+                    fontSize: '13px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#8d909e' }}>Best market</span>
+                    <span style={{ color: '#1b1e2d' }}>{rec.best_option.mandi_name}</span>
                   </div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-warm-muted">Timing</span>
-                    <span className="text-xs font-semibold text-[#1a1a1a]">{rec.best_option.sell_timing}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#8d909e' }}>Timing</span>
+                    <span style={{ color: '#1b1e2d' }}>{rec.best_option.sell_timing}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-warm-muted">Net price</span>
-                    <span className="text-sm font-serif font-bold" style={{ color: '#2a9d8f' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#8d909e' }}>Net price</span>
+                    <span style={{ color: '#446b26', fontVariantNumeric: 'tabular-nums' }}>
                       {formatRs(rec.best_option.net_price_rs)}/q
                     </span>
                   </div>
                 </div>
 
-                {/* Gain vs nearest */}
                 {gainVsNearest > 0 && (
-                  <div className="mt-2 text-xs font-semibold" style={{ color: '#2a9d8f' }}>
-                    +{formatRs(gainVsNearest)}/quintal (+{gainPct}%) vs nearest mandi
-                  </div>
+                  <p
+                    style={{
+                      fontSize: '12px',
+                      color: '#446b26',
+                      marginTop: '12px',
+                      marginBottom: 0,
+                    }}
+                  >
+                    +{formatRs(gainVsNearest)}/q &middot; +{gainPct}% vs nearest market
+                  </p>
                 )}
 
-                {/* Collapsible recommendation text (span + role=button so it can live
-                    inside the farmer card's parent <button> without nesting buttons). */}
                 <span
                   role="button"
                   tabIndex={0}
                   aria-expanded={isExpanded}
-                  className="mt-3 inline-flex items-center gap-1 text-xs font-sans font-medium text-warm-muted hover:text-[#1a1a1a] transition-colors cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); setExpandedReasoning(isExpanded ? null : idx) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setExpandedReasoning(isExpanded ? null : idx)
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
@@ -182,17 +214,46 @@ export default function SellOptimizer() {
                       setExpandedReasoning(isExpanded ? null : idx)
                     }
                   }}
+                  className="text-link"
+                  style={{
+                    display: 'inline-block',
+                    marginTop: '14px',
+                    fontSize: '12px',
+                  }}
                 >
-                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  AI recommendation
+                  {isExpanded ? '− Hide reasoning' : '+ Show reasoning'}
                 </span>
                 {isExpanded && (
-                  <div className="mt-2 space-y-2 animate-tab-enter">
-                    <p className="text-xs text-warm-body leading-relaxed m-0">
+                  <div
+                    className="animate-tab-enter"
+                    style={{
+                      marginTop: '12px',
+                      paddingTop: '12px',
+                      borderTop: '1px solid #e8e5e1',
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: '13px',
+                        lineHeight: 1.7,
+                        color: '#1b1e2d',
+                        margin: '0 0 8px 0',
+                      }}
+                    >
                       {rec.recommendation_text}
                     </p>
                     {rec.recommendation_tamil && (
-                      <p className="text-xs text-warm-muted leading-relaxed m-0 italic">
+                      <p
+                        style={{
+                          fontFamily:
+                            '"Source Serif 4", "Noto Serif Tamil", Georgia, serif',
+                          fontSize: '13px',
+                          lineHeight: 1.7,
+                          color: '#606373',
+                          margin: 0,
+                          fontStyle: 'italic',
+                        }}
+                      >
                         {rec.recommendation_tamil}
                       </p>
                     )}
@@ -204,125 +265,200 @@ export default function SellOptimizer() {
         </div>
       </div>
 
-      {/* ── Waterfall: Net Price Breakdown ────────────────────────────── */}
-      {activeFarmer && (() => {
-        const best = activeFarmer.best_option
-        const marketPrice = best.market_price_rs
-        const transport = best.transport_cost_rs
-        const storage = best.storage_loss_rs
-        const fee = best.mandi_fee_rs
-        const net = best.net_price_rs
-        const totalDeductions = transport + storage + fee
+      {/* ── Waterfall: Net Price Breakdown ────────────────────── */}
+      {activeFarmer &&
+        (() => {
+          const best = activeFarmer.best_option
+          const marketPrice = best.market_price_rs
+          const transport = best.transport_cost_rs
+          const storage = best.storage_loss_rs
+          const fee = best.mandi_fee_rs
+          const net = best.net_price_rs
+          const totalDeductions = transport + storage + fee
 
-        const deductions = [
-          { label: 'Transport', value: transport, pct: marketPrice > 0 ? (transport / marketPrice * 100) : 0 },
-          { label: 'Storage Loss', value: storage, pct: marketPrice > 0 ? (storage / marketPrice * 100) : 0 },
-          { label: 'Mandi Fee', value: fee, pct: marketPrice > 0 ? (fee / marketPrice * 100) : 0 },
-        ]
-        const maxDeduction = Math.max(...deductions.map(d => d.value), 1)
+          const rows = [
+            { label: 'Market price', value: marketPrice, sign: '' },
+            { label: 'Transport', value: -transport, sign: '−' },
+            { label: 'Storage loss', value: -storage, sign: '−' },
+            { label: 'Market vendor fee', value: -fee, sign: '−' },
+          ]
 
-        return (
-          <div data-tour="waterfall" className="mb-8">
-            <div className="section-header">How net price is calculated</div>
-            <p className="text-xs text-warm-muted mb-4 -mt-1">
-              {activeFarmer.farmer_name} {'\u2192'} {best.mandi_name} ({best.sell_timing})
-            </p>
-            <div className="card card-body">
-              {/* Summary line */}
-              <div className="flex items-center gap-3 mb-5 text-sm">
-                <span style={{ color: '#0d7377', fontWeight: 700 }}>{formatRs(marketPrice)}</span>
-                <span className="text-warm-muted">&minus;</span>
-                <span style={{ color: '#e63946', fontWeight: 600 }}>{formatRs(totalDeductions)}</span>
-                <span className="text-warm-muted">=</span>
-                <span style={{ color: '#2a9d8f', fontWeight: 700, fontSize: '1.1rem' }}>{formatRs(net)}/q</span>
-              </div>
-
-              {/* Deduction bars */}
-              <div className="space-y-3">
-                {deductions.map((d) => (
-                  <div key={d.label}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-warm-body font-medium">{d.label}</span>
-                      <span style={{ color: '#e63946', fontWeight: 600 }}>
-                        &minus;{formatRs(d.value)} <span className="text-warm-muted">({d.pct.toFixed(1)}%)</span>
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full" style={{ background: '#f0ede8' }}>
-                      <div
-                        className="h-2 rounded-full"
+          return (
+            <div data-tour="waterfall" style={{ marginBottom: '56px' }}>
+              <div className="section-header">How the net price is calculated</div>
+              <p
+                style={{
+                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                  fontSize: '13px',
+                  color: '#606373',
+                  marginTop: '-4px',
+                  marginBottom: '20px',
+                }}
+              >
+                {activeFarmer.farmer_name} &rarr; {best.mandi_name} ({best.sell_timing})
+              </p>
+              <table className="etable" style={{ maxWidth: '560px' }}>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.label}>
+                      <td style={{ color: r.label === 'Market price' ? '#1b1e2d' : '#606373' }}>
+                        {r.label}
+                      </td>
+                      <td
+                        className="num"
                         style={{
-                          background: '#e63946',
-                          width: `${Math.max((d.value / maxDeduction) * 100, d.value > 0 ? 4 : 0)}%`,
-                          transition: 'width 0.5s ease',
+                          textAlign: 'right',
+                          color: r.value < 0 ? '#c71f48' : '#1b1e2d',
                         }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Net price bar */}
-              <div className="mt-4 pt-3 border-t border-warm-border/40">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-warm-body font-semibold">Net to farmer</span>
-                  <span style={{ color: '#2a9d8f', fontWeight: 700 }}>{formatRs(net)}/q</span>
-                </div>
-                <div className="h-3 rounded-full" style={{ background: '#f0ede8' }}>
-                  <div
-                    className="h-3 rounded-full"
-                    style={{
-                      background: '#2a9d8f',
-                      width: `${marketPrice > 0 ? (net / marketPrice * 100) : 0}%`,
-                      transition: 'width 0.5s ease',
-                    }}
-                  />
-                </div>
-              </div>
+                      >
+                        {r.sign}
+                        {formatRs(Math.abs(r.value))}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td
+                      style={{
+                        fontFamily: '"Source Serif 4", Georgia, serif',
+                        color: '#1b1e2d',
+                      }}
+                    >
+                      Net to farmer
+                    </td>
+                    <td
+                      className="num"
+                      style={{
+                        textAlign: 'right',
+                        fontFamily: '"Source Serif 4", Georgia, serif',
+                        fontSize: '20px',
+                        color: '#446b26',
+                      }}
+                    >
+                      {formatRs(net)}/q
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p
+                style={{
+                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                  fontSize: '12px',
+                  color: '#8d909e',
+                  marginTop: '12px',
+                }}
+              >
+                Deductions total {formatRs(totalDeductions)} &middot;{' '}
+                {marketPrice > 0 ? ((totalDeductions / marketPrice) * 100).toFixed(1) : '0'}% of
+                market price.
+              </p>
             </div>
-          </div>
-        )
-      })()}
+          )
+        })()}
 
-
-      {/* ── Credit Readiness ─────────────────────────────────────────── */}
+      {/* ── Credit Readiness ─────────────────────────────────── */}
       {activeFarmer?.credit_readiness && (
-        <div data-tour="credit-readiness" className="mb-8">
-          <div className="section-header">{activeFarmer.farmer_name} — Credit Readiness</div>
+        <div data-tour="credit-readiness" style={{ marginBottom: '56px' }}>
+          <div className="section-header">
+            {activeFarmer.farmer_name} &mdash; credit readiness
+          </div>
           {(() => {
-            const cr = activeFarmer.credit_readiness
-            const readinessColor = cr.readiness === 'strong' ? '#2a9d8f' : cr.readiness === 'moderate' ? '#0d7377' : '#e63946'
-            const readinessLabel = cr.readiness === 'strong' ? 'Strong' : cr.readiness === 'moderate' ? 'Moderate' : 'Not Yet'
+            const cr = activeFarmer.credit_readiness!
+            const label =
+              cr.readiness === 'strong'
+                ? 'Strong'
+                : cr.readiness === 'moderate'
+                  ? 'Moderate'
+                  : 'Not yet'
+            const color =
+              cr.readiness === 'strong'
+                ? '#4a7c59'
+                : cr.readiness === 'moderate'
+                  ? '#446b26'
+                  : '#c71f48'
             return (
-              <div className="card-accent p-5" style={{ borderLeftColor: readinessColor, borderLeftWidth: 4 }}>
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: readinessColor }}>
-                      {readinessLabel}
-                    </span>
-                    <p className="text-sm text-warm-body mt-1 leading-relaxed" style={{ maxWidth: 560 }}>
-                      {cr.advice_en}
-                    </p>
+              <div
+                style={{
+                  borderLeft: `2px solid ${color}`,
+                  paddingLeft: '20px',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto',
+                  columnGap: '48px',
+                  rowGap: '20px',
+                }}
+              >
+                <div>
+                  <div className="eyebrow" style={{ color }}>
+                    {label}
                   </div>
-                  <div className="text-right ml-6 shrink-0">
-                    <div className="text-xs text-warm-muted">Expected revenue</div>
-                    <div className="text-lg font-serif font-bold" style={{ color: '#1a1a1a' }}>
-                      {formatRs(cr.expected_revenue_rs)}
-                    </div>
-                    <div className="text-xs text-warm-muted mt-1">Max advisable loan</div>
-                    <div className="text-base font-serif font-semibold" style={{ color: readinessColor }}>
-                      {formatRs(cr.max_advisable_input_loan_rs)}
-                    </div>
+                  <p
+                    style={{
+                      fontFamily: '"Source Serif 4", Georgia, serif',
+                      fontSize: '18px',
+                      lineHeight: '26px',
+                      color: '#1b1e2d',
+                      marginTop: '8px',
+                      maxWidth: '560px',
+                    }}
+                  >
+                    {cr.advice_en}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="eyebrow">Expected revenue</div>
+                  <p className="metric-number" style={{ marginTop: '4px' }}>
+                    {formatRs(cr.expected_revenue_rs)}
+                  </p>
+                  <div className="eyebrow" style={{ marginTop: '14px' }}>
+                    Max advisable loan
                   </div>
+                  <p
+                    style={{
+                      fontFamily: '"Source Serif 4", Georgia, serif',
+                      fontSize: '22px',
+                      color,
+                      marginTop: '4px',
+                    }}
+                  >
+                    {formatRs(cr.max_advisable_input_loan_rs)}
+                  </p>
                 </div>
                 {(cr.strengths.length > 0 || cr.risks.length > 0) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 pt-3 border-t border-warm-border">
+                  <div
+                    style={{
+                      gridColumn: '1 / -1',
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '32px',
+                      borderTop: '1px solid #e8e5e1',
+                      paddingTop: '16px',
+                    }}
+                  >
                     {cr.strengths.length > 0 && (
                       <div>
-                        <div className="text-xs font-semibold text-warm-muted mb-1.5">Strengths</div>
-                        <ul className="space-y-1">
-                          {cr.strengths.map((s, i) => (
-                            <li key={i} className="flex items-start gap-1.5 text-xs text-warm-body">
-                              <span style={{ color: '#2a9d8f', flexShrink: 0 }}>✓</span> {s}
+                        <div className="eyebrow">Strengths</div>
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0 0' }}>
+                          {cr.strengths.map((item, i) => (
+                            <li
+                              key={i}
+                              style={{
+                                fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                                fontSize: '13px',
+                                lineHeight: 1.7,
+                                color: '#606373',
+                                paddingLeft: '14px',
+                                position: 'relative',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  color: '#4a7c59',
+                                }}
+                              >
+                                +
+                              </span>
+                              {item}
                             </li>
                           ))}
                         </ul>
@@ -330,11 +466,30 @@ export default function SellOptimizer() {
                     )}
                     {cr.risks.length > 0 && (
                       <div>
-                        <div className="text-xs font-semibold text-warm-muted mb-1.5">Risks</div>
-                        <ul className="space-y-1">
-                          {cr.risks.map((r, i) => (
-                            <li key={i} className="flex items-start gap-1.5 text-xs text-warm-body">
-                              <span style={{ color: '#e63946', flexShrink: 0 }}>!</span> {r}
+                        <div className="eyebrow">Risks</div>
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0 0' }}>
+                          {cr.risks.map((item, i) => (
+                            <li
+                              key={i}
+                              style={{
+                                fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                                fontSize: '13px',
+                                lineHeight: 1.7,
+                                color: '#606373',
+                                paddingLeft: '14px',
+                                position: 'relative',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  color: '#c71f48',
+                                }}
+                              >
+                                −
+                              </span>
+                              {item}
                             </li>
                           ))}
                         </ul>
@@ -348,11 +503,18 @@ export default function SellOptimizer() {
         </div>
       )}
 
-      {/* ── Map: farmer + mandis with routes ───────────────────────────── */}
+      {/* ── Map ───────────────────────────────────────────────── */}
       {activeFarmer && (
-        <div className="mb-8">
-          <div className="section-header">{activeFarmer.farmer_name} \u2014 Sell Options Map</div>
-          <div className="rounded-[10px] border border-warm-border overflow-hidden" style={{ height: 400 }}>
+        <div style={{ marginBottom: '56px' }}>
+          <div className="section-header">{activeFarmer.farmer_name} &mdash; sell options map</div>
+          <div
+            style={{
+              height: 400,
+              border: '1px solid #e8e5e1',
+              borderRadius: '4px',
+              overflow: 'hidden',
+            }}
+          >
             <MapContainer
               center={[activeFarmer.farmer_lat, activeFarmer.farmer_lon]}
               zoom={9}
@@ -365,28 +527,24 @@ export default function SellOptimizer() {
                 attribution='&copy; <a href="https://carto.com/">CARTO</a>'
               />
 
-              {/* Route lines from farmer to each mandi */}
               {activeFarmer.all_options.map((opt, i) => {
                 const mandiPos = mandiCoords.get(opt.mandi_id)
                 if (!mandiPos) return null
                 return (
                   <Polyline
                     key={`route-${i}`}
-                    positions={[
-                      [activeFarmer.farmer_lat, activeFarmer.farmer_lon],
-                      mandiPos,
-                    ]}
+                    positions={[[activeFarmer.farmer_lat, activeFarmer.farmer_lon], mandiPos]}
                     pathOptions={{
                       color: netPriceColor(opt.net_price_rs, bestNetPrice),
-                      weight: opt.mandi_id === activeFarmer.best_option.mandi_id ? 3 : 1.5,
+                      weight: opt.mandi_id === activeFarmer.best_option.mandi_id ? 2.5 : 1,
                       opacity: opt.mandi_id === activeFarmer.best_option.mandi_id ? 0.9 : 0.4,
-                      dashArray: opt.mandi_id === activeFarmer.best_option.mandi_id ? undefined : '6 4',
+                      dashArray:
+                        opt.mandi_id === activeFarmer.best_option.mandi_id ? undefined : '4 4',
                     }}
                   />
                 )
               })}
 
-              {/* Mandi markers */}
               {activeFarmer.all_options.map((opt) => {
                 const mandiPos = mandiCoords.get(opt.mandi_id)
                 if (!mandiPos) return null
@@ -395,39 +553,57 @@ export default function SellOptimizer() {
                   <CircleMarker
                     key={opt.mandi_id}
                     center={mandiPos}
-                    radius={isBest ? 10 : 7}
+                    radius={isBest ? 9 : 6}
                     pathOptions={{
-                      color: '#fff',
+                      color: '#ffffff',
                       weight: 2,
                       fillColor: netPriceColor(opt.net_price_rs, bestNetPrice),
                       fillOpacity: 0.9,
                     }}
                   >
                     <Popup>
-                      <div style={{ fontFamily: '"DM Sans", sans-serif', minWidth: 180 }}>
-                        <div style={{ fontFamily: '"Source Serif 4", serif', fontWeight: 700, fontSize: '0.95rem', marginBottom: 4 }}>
+                      <div
+                        style={{
+                          fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                          minWidth: 180,
+                          color: '#1b1e2d',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontFamily: '"Source Serif 4", Georgia, serif',
+                            fontSize: '15px',
+                            marginBottom: '6px',
+                          }}
+                        >
                           {opt.mandi_name}
                         </div>
-                        <div style={{ fontSize: '0.8rem' }}>
+                        <div style={{ fontSize: '12px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                            <span style={{ color: '#888' }}>Timing</span>
-                            <span style={{ fontWeight: 600 }}>{opt.sell_timing}</span>
+                            <span style={{ color: '#8d909e' }}>Timing</span>
+                            <span>{opt.sell_timing}</span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                            <span style={{ color: '#888' }}>Market price</span>
+                            <span style={{ color: '#8d909e' }}>Market</span>
                             <span>{formatRs(opt.market_price_rs)}</span>
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                            <span style={{ color: '#888' }}>Transport</span>
-                            <span style={{ color: '#e63946' }}>-{formatRs(opt.transport_cost_rs)}</span>
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              padding: '4px 0',
+                              borderTop: '1px solid #e8e5e1',
+                              marginTop: '4px',
+                            }}
+                          >
+                            <span>Net</span>
+                            <span style={{ color: '#446b26' }}>
+                              {formatRs(opt.net_price_rs)}/q
+                            </span>
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderTop: '1px solid #eee', marginTop: 4, paddingTop: 4 }}>
-                            <span style={{ fontWeight: 600 }}>Net price</span>
-                            <span style={{ fontWeight: 700, color: '#2a9d8f' }}>{formatRs(opt.net_price_rs)}/q</span>
-                          </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                            <span style={{ color: '#888' }}>Distance</span>
-                            <span>{opt.distance_km.toFixed(0)} km ({opt.drive_time_min} min)</span>
+                            <span style={{ color: '#8d909e' }}>Distance</span>
+                            <span>{opt.distance_km.toFixed(0)} km</span>
                           </div>
                         </div>
                       </div>
@@ -436,23 +612,32 @@ export default function SellOptimizer() {
                 )
               })}
 
-              {/* Farmer marker (distinct style) */}
               <CircleMarker
                 center={[activeFarmer.farmer_lat, activeFarmer.farmer_lon]}
-                radius={10}
+                radius={8}
                 pathOptions={{
-                  color: '#0d7377',
-                  weight: 3,
-                  fillColor: '#fff',
+                  color: '#446b26',
+                  weight: 2,
+                  fillColor: '#ffffff',
                   fillOpacity: 1,
                 }}
               >
                 <Popup>
-                  <div style={{ fontFamily: '"DM Sans", sans-serif' }}>
-                    <div style={{ fontFamily: '"Source Serif 4", serif', fontWeight: 700, fontSize: '0.95rem' }}>
+                  <div
+                    style={{
+                      fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                      color: '#1b1e2d',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: '"Source Serif 4", Georgia, serif',
+                        fontSize: '15px',
+                      }}
+                    >
                       {activeFarmer.farmer_name}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#888', marginTop: 2 }}>
+                    <div style={{ fontSize: '12px', color: '#8d909e', marginTop: '2px' }}>
                       {activeFarmer.commodity_name} &middot; {activeFarmer.quantity_quintals} quintals
                     </div>
                   </div>
@@ -460,147 +645,129 @@ export default function SellOptimizer() {
               </CircleMarker>
             </MapContainer>
           </div>
-
-          {/* Map legend */}
-          <div className="flex items-center gap-5 mt-3 text-xs text-warm-muted">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full border-2" style={{ borderColor: '#0d7377', background: '#fff' }} />
-              Farmer
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full" style={{ background: '#2a9d8f' }} />
-              Best net price
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full" style={{ background: '#0d7377' }} />
-              Mid range
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full" style={{ background: '#e63946' }} />
-              Worst net price
-            </div>
-          </div>
         </div>
       )}
 
-      {/* ── Options table ──────────────────────────────────────────────── */}
+      {/* ── Options table ──────────────────────────────────────── */}
       {activeFarmer && sortedOptions.length > 0 && (
-        <div className="mb-8">
-          <div className="section-header">{activeFarmer.farmer_name} \u2014 All Options Ranked</div>
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Mandi</th>
-                  <th>Timing</th>
-                  <th>Market Price</th>
-                  <th>Transport</th>
-                  <th>Storage Loss</th>
-                  <th>Mandi Fee</th>
-                  <th>Net Price</th>
-                  <th>Distance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedOptions.map((opt, idx) => {
-                  const isBest = idx === 0
-                  return (
-                    <tr
-                      key={`${opt.mandi_id}-${opt.sell_timing}`}
-                      className={isBest ? '!bg-emerald-50/40' : ''}
-                    >
-                      <td>
-                        {isBest ? (
-                          <span className="badge-green text-[0.65rem]">Best</span>
-                        ) : (
-                          <span className="text-xs text-warm-muted">#{idx + 1}</span>
-                        )}
-                      </td>
-                      <td className="font-semibold text-[#1a1a1a]">{opt.mandi_name}</td>
-                      <td>{opt.sell_timing}</td>
-                      <td>{formatRs(opt.market_price_rs)}</td>
-                      <td className="text-xs" style={{ color: '#e63946' }}>-{formatRs(opt.transport_cost_rs)}</td>
-                      <td className="text-xs" style={{ color: '#e63946' }}>-{formatRs(opt.storage_loss_rs)}</td>
-                      <td className="text-xs" style={{ color: '#e63946' }}>-{formatRs(opt.mandi_fee_rs)}</td>
-                      <td>
-                        <span className="font-semibold" style={{ color: netPriceColor(opt.net_price_rs, bestNetPrice) }}>
-                          {formatRs(opt.net_price_rs)}
-                        </span>
-                      </td>
-                      <td className="text-xs text-warm-muted">
-                        {opt.distance_km.toFixed(0)} km
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+        <div style={{ marginBottom: '56px' }}>
+          <div className="section-header">
+            {activeFarmer.farmer_name} &mdash; all options ranked
           </div>
+          <table className="etable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Market</th>
+                <th>Timing</th>
+                <th className="num">Price</th>
+                <th className="num">Transport</th>
+                <th className="num">Storage</th>
+                <th className="num">Fee</th>
+                <th className="num">Net</th>
+                <th className="num">Dist</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedOptions.map((opt, idx) => {
+                const isBest = idx === 0
+                return (
+                  <tr key={`${opt.mandi_id}-${opt.sell_timing}`}>
+                    <td>
+                      {isBest ? (
+                        <span style={{ color: '#446b26' }}>best</span>
+                      ) : (
+                        <span style={{ color: '#8d909e' }}>{idx + 1}</span>
+                      )}
+                    </td>
+                    <td style={{ fontWeight: 500 }}>{opt.mandi_name}</td>
+                    <td>{opt.sell_timing}</td>
+                    <td className="num">{formatRs(opt.market_price_rs)}</td>
+                    <td className="num" style={{ color: '#c71f48' }}>
+                      −{formatRs(opt.transport_cost_rs)}
+                    </td>
+                    <td className="num" style={{ color: '#c71f48' }}>
+                      −{formatRs(opt.storage_loss_rs)}
+                    </td>
+                    <td className="num" style={{ color: '#c71f48' }}>
+                      −{formatRs(opt.mandi_fee_rs)}
+                    </td>
+                    <td
+                      className="num"
+                      style={{
+                        color: netPriceColor(opt.net_price_rs, bestNetPrice),
+                        fontWeight: 600,
+                      }}
+                    >
+                      {formatRs(opt.net_price_rs)}
+                    </td>
+                    <td className="num" style={{ color: '#8d909e' }}>
+                      {opt.distance_km.toFixed(0)} km
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* ── Delivery Log ──────────────────────────────────────────────── */}
-      <div className="mb-8">
-        <div className="section-header">Delivery Log</div>
+      {/* ── Delivery Log ────────────────────────────────────── */}
+      <div style={{ marginBottom: '24px' }}>
+        <div className="section-header">Delivery log</div>
         {(() => {
           const logs = deliveryLogs.data?.delivery_logs ?? []
           if (deliveryLogs.isLoading) return <LoadingSpinner />
           if (!logs.length) {
             return (
-              <p className="text-sm text-warm-muted" style={{ maxWidth: 540 }}>
-                No deliveries recorded yet — recommendations are generated but SMS delivery is not yet configured.
+              <p
+                style={{
+                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                  fontSize: '13px',
+                  color: '#606373',
+                  maxWidth: '540px',
+                }}
+              >
+                No deliveries recorded yet &mdash; recommendations are generated but SMS delivery
+                is not yet configured.
               </p>
             )
           }
-          const statusColor: Record<string, string> = {
-            sent: '#2a9d8f',
-            dry_run: '#d4a019',
-            failed: '#e63946',
-            skipped: '#888',
-          }
           return (
-            <div className="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Farmer</th>
-                    <th>Phone</th>
-                    <th>Status</th>
-                    <th>Message</th>
-                    <th>Time</th>
+            <table className="etable">
+              <thead>
+                <tr>
+                  <th>Farmer</th>
+                  <th>Phone</th>
+                  <th>Status</th>
+                  <th>Message</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log, idx) => (
+                  <tr key={idx}>
+                    <td style={{ fontWeight: 500 }}>{log.farmer_name}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#8d909e' }}>
+                      {log.phone}
+                    </td>
+                    <td style={{ color: log.status === 'failed' ? '#c71f48' : '#606373' }}>
+                      {log.status}
+                    </td>
+                    <td style={{ maxWidth: 280 }}>
+                      <span title={log.sms_text}>
+                        {log.sms_text.length > 80
+                          ? log.sms_text.slice(0, 80) + '…'
+                          : log.sms_text}
+                      </span>
+                    </td>
+                    <td style={{ color: '#8d909e' }}>
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {logs.map((log, idx) => (
-                    <tr key={idx}>
-                      <td className="font-semibold text-[#1a1a1a]">{log.farmer_name}</td>
-                      <td className="text-xs text-warm-muted font-mono">{log.phone}</td>
-                      <td>
-                        <span
-                          className="text-[0.7rem] font-semibold px-2 py-0.5 rounded-md"
-                          style={{
-                            color: statusColor[log.status] ?? '#888',
-                            background: `${statusColor[log.status] ?? '#888'}14`,
-                            border: `1px solid ${statusColor[log.status] ?? '#888'}44`,
-                          }}
-                        >
-                          {log.status}
-                        </span>
-                      </td>
-                      <td className="text-xs text-warm-body" style={{ maxWidth: 280 }}>
-                        <span title={log.sms_text}>
-                          {log.sms_text.length > 80 ? log.sms_text.slice(0, 80) + '...' : log.sms_text}
-                        </span>
-                      </td>
-                      <td className="text-xs text-warm-muted">
-                        {new Date(log.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           )
         })()}
       </div>

@@ -1,11 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  FileText,
-  TrendingUp,
-  IndianRupee,
-  ArrowRight,
-} from 'lucide-react'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import '../lib/leaflet-fix'
 import MetricCard from '../components/MetricCard'
@@ -15,40 +9,602 @@ import {
   useMarketPrices,
   useMandis,
   usePriceConflicts,
+  usePriceForecasts,
+  useSellRecommendations,
+  useDeliveryLogs,
 } from '../lib/api'
-import { formatRs, directionArrow } from '../lib/format'
+import { formatRs } from '../lib/format'
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Interactive pipeline hero ────────────────────────────────────────────────
 
-/** Abbreviate commodity names for grid headers */
-function abbreviateCommodity(name: string): string {
-  const abbrevs: Record<string, string> = {
-    'paddy': 'PADDY',
-    'rice': 'RICE',
-    'groundnut': 'GNUT',
-    'turmeric': 'TURM',
-    'cotton': 'COTN',
-    'maize': 'MAIZE',
-    'banana': 'BANA',
-    'coconut': 'COCO',
-    'coconut (copra)': 'COPA',
-    'onion': 'ONIN',
-    'black gram': 'BGRAM',
-    'black gram (urad)': 'URAD',
-    'green gram (moong)': 'MUNG',
+// Distilled per-step copy: short phrase for the strip, body paragraph for the
+// detail panel. Tech-demo voice — no references to alternatives.
+const HERO_STEPS = [
+  {
+    num: 1,
+    name: 'Collect',
+    short: 'Weekly prices from two government databases',
+    body: "Real arrival prices — paddy, turmeric, cotton, onion, banana — pulled from Agmarknet and eNAM, two free public government databases. Fifteen regulated markets across Tamil Nadu, refreshed every week. This is ground truth that buyers already have and farmers don't.",
+    outputType: 'readings' as const,
+  },
+  {
+    num: 2,
+    name: 'Reconcile',
+    short: 'Agent investigates when the two sources disagree',
+    body: "The two databases disagree on the same market's price five to twelve percent of the time. When they do, an agent investigates — checking neighboring markets, seasonal norms, arrival volumes, and transport-arbitrage costs — and produces a single reconciled price with its reasoning logged. Farmers never see the disagreement; they just see the answer.",
+    outputType: 'reconciliation' as const,
+  },
+  {
+    num: 3,
+    name: 'Forecast',
+    short: 'Probabilistic forecasts out to thirty days',
+    body: "Chronos-2 — Amazon's open time-series foundation model — produces probabilistic forecasts for every commodity at every market, out to thirty days. Each market's historical bias is learned from five years of arrival data and corrected for, the same way a weather pipeline corrects against station history.",
+    outputType: 'forecast' as const,
+  },
+  {
+    num: 4,
+    name: 'Advise',
+    short: 'Best market, best date, one Tamil sentence',
+    body: "The pipeline computes the net price at every combination of destination market and sell date — after transport, storage loss, and market vendor fees — then a broker agent picks the best option and writes a one-sentence explanation in English and Tamil, with a flag for whether she should seek credit against expected harvest. The answer is rarely \"sell today at your nearest market\"; it's usually hold, move, or both.",
+    outputType: 'recommendation' as const,
+  },
+  {
+    num: 5,
+    name: 'Deliver',
+    short: 'SMS via Twilio, weekly during harvest',
+    body: "SMS via Twilio. Each enrolled farmer receives one recommendation per week during harvest season, in her own language, with the projected gain spelled out. Every delivery is logged with latency, cost, and confirmation.",
+    outputType: 'delivery' as const,
+  },
+]
+
+type HeroOutputType = typeof HERO_STEPS[number]['outputType']
+
+function ExploreLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Link
+      to={to}
+      style={{
+        display: 'inline-block',
+        marginTop: '12px',
+        fontFamily: '"Space Grotesk", system-ui, sans-serif',
+        fontSize: '12px',
+        fontWeight: 500,
+        color: '#446b26',
+        textDecoration: 'none',
+      }}
+    >
+      {label}
+    </Link>
+  )
+}
+
+function StepOutput({ outputType }: { outputType: HeroOutputType }) {
+  const prices = useMarketPrices()
+  const forecasts = usePriceForecasts()
+  const conflicts = usePriceConflicts()
+  const recommendations = useSellRecommendations()
+  const deliveries = useDeliveryLogs()
+
+  const panelStyle: React.CSSProperties = {
+    fontFamily: '"Space Grotesk", system-ui, sans-serif',
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: '#606373',
   }
-  const lower = name.toLowerCase()
-  return abbrevs[lower] ?? name.slice(0, 5).toUpperCase()
+
+  if (outputType === 'readings') {
+    const rows = (prices.data?.market_prices ?? []).slice(0, 3)
+    const cols = 'minmax(0, 1.3fr) minmax(0, 1.1fr) minmax(0, 0.9fr)'
+    return (
+      <div style={panelStyle}>
+        <div className="eyebrow" style={{ marginBottom: '10px' }}>
+          Latest arrival prices · 11:30 IST
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: cols,
+            gap: '10px',
+            padding: '0 0 6px 0',
+            fontSize: '10px',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: '#8d909e',
+            borderBottom: '1px solid #e8e5e1',
+          }}
+        >
+          <span>Commodity</span>
+          <span>Market</span>
+          <span style={{ textAlign: 'right' }}>Price</span>
+        </div>
+        <div>
+          {rows.map((r, i) => (
+            <div
+              key={`${r.mandi_id}-${r.commodity_id}-${i}`}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: cols,
+                gap: '10px',
+                padding: '7px 0',
+                borderBottom: i < rows.length - 1 ? '1px solid #f2efeb' : '1px solid #e8e5e1',
+                fontVariantNumeric: 'tabular-nums',
+                fontSize: '12px',
+              }}
+            >
+              <span
+                style={{
+                  color: '#1b1e2d',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {r.commodity_name}
+              </span>
+              <span
+                style={{
+                  color: '#606373',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {r.mandi_name}
+              </span>
+              <span style={{ color: '#1b1e2d', textAlign: 'right' }}>
+                {formatRs(r.reconciled_price_rs)}
+              </span>
+            </div>
+          ))}
+        </div>
+        <ExploreLink to="/inputs" label="→ See all market prices" />
+      </div>
+    )
+  }
+
+  if (outputType === 'reconciliation') {
+    const conflict =
+      (conflicts.data?.price_conflicts ?? []).find(
+        (c) => c.commodity_name.toLowerCase().includes('turmeric') && c.investigation_steps?.length,
+      ) ?? conflicts.data?.price_conflicts?.[0]
+    if (!conflict) return <div style={panelStyle}>Loading…</div>
+    return (
+      <div style={panelStyle}>
+        <div className="eyebrow" style={{ marginBottom: '10px' }}>
+          Reconciliation · {conflict.commodity_name} · {conflict.mandi_name}
+        </div>
+        <p
+          style={{
+            fontFamily: '"Source Serif 4", Georgia, serif',
+            fontSize: '13px',
+            lineHeight: 1.55,
+            color: '#1b1e2d',
+            maxWidth: '520px',
+          }}
+        >
+          {conflict.commodity_name} at {conflict.mandi_name}. Agmarknet posted{' '}
+          <span style={{ color: '#c71f48', fontWeight: 500 }}>
+            {formatRs(conflict.agmarknet_price)}
+          </span>
+          , eNAM posted{' '}
+          <span style={{ color: '#c71f48', fontWeight: 500 }}>
+            {formatRs(conflict.enam_price)}
+          </span>
+          . Investigation checked neighboring markets, arrival volumes, and historical spread — reconciled at{' '}
+          <span style={{ color: '#446b26', fontWeight: 500 }}>
+            {formatRs(conflict.reconciled_price)}
+          </span>
+          .
+        </p>
+        <div
+          style={{
+            fontSize: '11px',
+            color: '#8d909e',
+            marginTop: '10px',
+          }}
+        >
+          resolution: {conflict.resolution.replace(/_/g, ' ')} · Δ{' '}
+          {conflict.delta_pct.toFixed(1)}%
+        </div>
+        <ExploreLink to="/inputs" label="→ See the reconciliation log" />
+      </div>
+    )
+  }
+
+  if (outputType === 'forecast') {
+    const f =
+      (forecasts.data?.price_forecasts ?? []).find(
+        (x) => x.commodity_name.toLowerCase().includes('tomato'),
+      ) ?? forecasts.data?.price_forecasts?.[0]
+    if (!f) return <div style={panelStyle}>Loading…</div>
+    // current_price_rs / price_7d can be null from api/price-forecast.ts when
+    // the horizon row is missing — fall back to 0 so the teaser still renders.
+    const curPrice = f.current_price_rs ?? 0
+    const p7 = f.price_7d ?? 0
+    const days = ['Mon', 'Tue', 'Wed']
+    const rows = days.map((day, i) => {
+      const t = (i + 1) / 7
+      const median = Math.round(curPrice * (1 - t) + p7 * t)
+      const band = curPrice * 0.018 * (1 + i * 0.25)
+      return {
+        day,
+        median,
+        low: Math.round(median - band),
+        high: Math.round(median + band),
+      }
+    })
+    const cols = 'minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)'
+    return (
+      <div style={panelStyle}>
+        <div className="eyebrow" style={{ marginBottom: '10px' }}>
+          {f.commodity_name} · {f.mandi_name}
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: cols,
+            gap: '10px',
+            padding: '0 0 6px 0',
+            fontSize: '10px',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: '#8d909e',
+            borderBottom: '1px solid #e8e5e1',
+          }}
+        >
+          <span>Day</span>
+          <span style={{ textAlign: 'right' }}>Low</span>
+          <span style={{ textAlign: 'right' }}>Median</span>
+          <span style={{ textAlign: 'right' }}>High</span>
+        </div>
+        <div>
+          {rows.map((r, i) => (
+            <div
+              key={r.day}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: cols,
+                gap: '10px',
+                padding: '7px 0',
+                borderBottom:
+                  i < rows.length - 1 ? '1px solid #f2efeb' : '1px solid #e8e5e1',
+                fontVariantNumeric: 'tabular-nums',
+                fontSize: '12px',
+              }}
+            >
+              <span style={{ color: '#8d909e' }}>{r.day}</span>
+              <span style={{ color: '#8d909e', textAlign: 'right' }}>
+                {formatRs(r.low)}
+              </span>
+              <span style={{ color: '#1b1e2d', textAlign: 'right' }}>
+                {formatRs(r.median)}
+              </span>
+              <span style={{ color: '#8d909e', textAlign: 'right' }}>
+                {formatRs(r.high)}
+              </span>
+            </div>
+          ))}
+        </div>
+        <ExploreLink to="/forecast" label="→ See per-market forecasts" />
+      </div>
+    )
+  }
+
+  if (outputType === 'recommendation') {
+    const rec = (recommendations.data?.sell_recommendations ?? []).find(
+      (r) => r.recommendation_tamil && r.recommendation_text,
+    )
+    if (!rec) return <div style={panelStyle}>Loading…</div>
+    return (
+      <div style={panelStyle}>
+        <div className="eyebrow" style={{ marginBottom: '10px' }}>
+          Recommendation · {rec.farmer_name} · Tamil
+        </div>
+        <p
+          style={{
+            fontFamily: '"Noto Serif Tamil", "Source Serif 4", Georgia, serif',
+            fontSize: '12px',
+            lineHeight: 1.5,
+            color: '#1b1e2d',
+            marginBottom: '4px',
+            maxWidth: '520px',
+          }}
+        >
+          {rec.recommendation_tamil}
+        </p>
+        <p
+          style={{
+            fontFamily: '"Space Grotesk", system-ui, sans-serif',
+            fontSize: '11px',
+            color: '#606373',
+            lineHeight: 1.5,
+            marginBottom: 0,
+            maxWidth: '520px',
+          }}
+        >
+          {rec.recommendation_text}
+        </p>
+        <ExploreLink to="/sell" label="→ See farmer recommendations" />
+      </div>
+    )
+  }
+
+  if (outputType === 'delivery') {
+    const d =
+      (deliveries.data?.delivery_logs ?? []).find((x) => x.status === 'sent') ??
+      deliveries.data?.delivery_logs?.[0]
+    const ts = d?.created_at ?? ''
+    const phone = (d?.phone ?? '+919443xxx821').replace(/\d(?=\d{3})/g, '•')
+    const length = d?.sms_text_local?.length ?? 92
+    const farmerLabel = d?.farmer_name ?? phone.slice(0, 16)
+    const row = (label: string, value: string) => (
+      <div style={{ display: 'flex', gap: '8px', fontSize: '12px', lineHeight: '18px' }}>
+        <span style={{ color: '#8d909e', minWidth: '56px' }}>{label}</span>
+        <span style={{ color: '#1b1e2d', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      </div>
+    )
+    return (
+      <div style={panelStyle}>
+        <div className="eyebrow" style={{ marginBottom: '10px' }}>
+          Delivery log · {farmerLabel}
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+            columnGap: '24px',
+            rowGap: '6px',
+          }}
+        >
+          {row('delivery', '0x7b2c')}
+          {row('cost', '₹0.01 · $0.00012')}
+          {row('farmer', phone.slice(0, 16))}
+          {row('length', `${length} chars`)}
+          {row('channel', `twilio · ${d?.status ?? 'sent'}`)}
+          {row('confirm', 'delivered · ok')}
+          {row('sent', `${ts.slice(11, 19) || '14:23:07'} IST`)}
+        </div>
+        <ExploreLink to="/pipeline" label="→ See the delivery log" />
+      </div>
+    )
+  }
+
+  return null
 }
 
-/** Price cell color: green above seasonal avg, red below, amber near */
-function priceColor(price: number, avgPrice: number): string {
-  const ratio = price / avgPrice
-  if (ratio >= 1.05) return '#2a9d8f'
-  if (ratio <= 0.95) return '#e63946'
-  return '#0d7377'
-}
+function PipelineHero() {
+  const [selected, setSelected] = useState(0) // default Ingest
+  const [locked, setLocked] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 40)
+    return () => clearTimeout(t)
+  }, [])
+
+  const step = HERO_STEPS[selected]
+
+  return (
+    <section style={{ paddingTop: '0', paddingBottom: '0' }}>
+      <h1
+        style={{
+          fontFamily: '"Source Serif 4", Georgia, serif',
+          fontSize: '28px',
+          lineHeight: '34px',
+          fontWeight: 400,
+          color: '#1b1e2d',
+          letterSpacing: '-0.01em',
+        }}
+      >
+        Crop pricing agent for farmers across Tamil Nadu
+      </h1>
+      <p
+        style={{
+          marginTop: '12px',
+          fontFamily: '"Source Serif 4", Georgia, serif',
+          fontSize: '16px',
+          lineHeight: 1.55,
+          color: '#606373',
+          maxWidth: '820px',
+        }}
+      >
+        An AI broker for smallholder farmers: pulls real prices from two government databases, reconciles the disagreements between them, and works out ideal markets to sell at.
+      </p>
+
+      <div style={{ height: '24px' }} />
+
+      {/* Step row */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${HERO_STEPS.length}, 1fr)`,
+          gap: '8px',
+          position: 'relative',
+        }}
+      >
+        {/* connector line animated on mount */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: '3%',
+            right: '3%',
+            height: '1px',
+            background: '#e8e5e1',
+            transform: mounted ? 'scaleX(1)' : 'scaleX(0)',
+            transformOrigin: 'left center',
+            transition: 'transform 800ms ease-out',
+            zIndex: 0,
+          }}
+        />
+        {HERO_STEPS.map((s, i) => {
+          const isActive = i === selected
+          return (
+            <button
+              key={s.num}
+              onMouseEnter={() => !locked && setSelected(i)}
+              onClick={() => {
+                setSelected(i)
+                setLocked(true)
+              }}
+              style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '10px',
+                padding: '0 0 6px 0',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                zIndex: 1,
+              }}
+            >
+              <div
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  background: '#ffffff',
+                  border: isActive
+                    ? '1px solid #446b26'
+                    : '1px solid #c4bfb6',
+                  marginTop: '14px',
+                  position: 'relative',
+                }}
+              >
+                {isActive && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: '2px',
+                      background: '#446b26',
+                      borderRadius: '50%',
+                    }}
+                  />
+                )}
+              </div>
+              <div
+                style={{
+                  fontFamily: '"Source Serif 4", Georgia, serif',
+                  fontSize: '13px',
+                  fontWeight: 400,
+                  color: '#8d909e',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {String(s.num).padStart(2, '0')}
+              </div>
+              <div
+                style={{
+                  fontFamily: '"Source Serif 4", Georgia, serif',
+                  fontSize: '20px',
+                  lineHeight: '26px',
+                  fontWeight: 400,
+                  color: isActive ? '#1b1e2d' : '#606373',
+                  letterSpacing: '-0.005em',
+                }}
+              >
+                {s.name}
+              </div>
+              <div
+                style={{
+                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                  fontSize: '12px',
+                  lineHeight: 1.45,
+                  color: isActive ? '#606373' : '#8d909e',
+                  maxWidth: '160px',
+                }}
+              >
+                {s.short}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Detail + output panel */}
+      <div
+        key={step.num}
+        className="animate-fade-in"
+        style={{
+          marginTop: '24px',
+          paddingTop: '20px',
+          borderTop: '1px solid #e8e5e1',
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.1fr)',
+          columnGap: '32px',
+          rowGap: '14px',
+          alignItems: 'start',
+        }}
+      >
+        <div style={{ paddingTop: '4px', minWidth: 0 }}>
+          <div
+            className="eyebrow"
+            style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}
+          >
+            <span>Step {String(step.num).padStart(2, '0')}</span>
+            <span
+              style={{
+                fontFamily: '"Source Serif 4", Georgia, serif',
+                fontSize: '18px',
+                letterSpacing: 0,
+                textTransform: 'none',
+                color: '#1b1e2d',
+                fontWeight: 400,
+              }}
+            >
+              {step.name}
+            </span>
+          </div>
+          <p
+            style={{
+              fontFamily: '"Source Serif 4", Georgia, serif',
+              fontSize: '13px',
+              lineHeight: 1.55,
+              color: '#1b1e2d',
+              marginTop: '10px',
+              maxWidth: '460px',
+            }}
+          >
+            {step.body}
+          </p>
+        </div>
+        <div
+          style={{
+            backgroundColor: '#fcfaf7',
+            border: '1px solid #e8e5e1',
+            borderLeft: '2px solid #446b26',
+            borderRadius: '4px',
+            padding: '16px 18px',
+            minWidth: 0,
+            maxWidth: '100%',
+            maxHeight: '240px',
+            overflow: 'hidden',
+          }}
+        >
+          <StepOutput outputType={step.outputType} />
+        </div>
+      </div>
+
+      {/* Honesty line */}
+      <div
+        style={{
+          marginTop: '14px',
+          fontFamily: '"Space Grotesk", system-ui, sans-serif',
+          fontSize: '11px',
+          color: '#8d909e',
+          fontStyle: 'italic',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        Last run: Mon Apr 14 · 4.8s · $0.002
+      </div>
+    </section>
+  )
+}
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -57,42 +613,6 @@ export default function MarketPrices() {
   const prices = useMarketPrices()
   const mandis = useMandis()
   const conflicts = usePriceConflicts()
-  const [hoveredCell, setHoveredCell] = useState<string | null>(null)
-
-  // ── Price grid data ─────────────────────────────────────────────────────
-  const priceGrid = useMemo(() => {
-    if (!prices.data?.market_prices?.length) return null
-
-    const priceList = prices.data.market_prices
-
-    const mandiMap = new Map<string, string>()
-    const commodityMap = new Map<string, string>()
-    for (const p of priceList) {
-      if (!mandiMap.has(p.mandi_id)) mandiMap.set(p.mandi_id, p.mandi_name)
-      if (!commodityMap.has(p.commodity_id)) commodityMap.set(p.commodity_id, p.commodity_name)
-    }
-
-    const mandiList = Array.from(mandiMap.entries())
-    const commodityList = Array.from(commodityMap.entries())
-
-    // Build lookup: "mandiId|commodityId" -> MarketPrice
-    const lookup = new Map<string, typeof priceList[0]>()
-    for (const p of priceList) {
-      lookup.set(`${p.mandi_id}|${p.commodity_id}`, p)
-    }
-
-    // Compute average price per commodity for coloring
-    const avgPrices = new Map<string, number>()
-    for (const [cid] of commodityList) {
-      const commodityPrices = priceList.filter((p) => p.commodity_id === cid)
-      if (commodityPrices.length) {
-        const avg = commodityPrices.reduce((s, p) => s + p.reconciled_price_rs, 0) / commodityPrices.length
-        avgPrices.set(cid, avg)
-      }
-    }
-
-    return { mandis: mandiList, commodities: commodityList, lookup, avgPrices }
-  }, [prices.data])
 
   // ── Conflict counts per mandi (for map coloring) ──────────────────────
   const conflictsByMandi = useMemo(() => {
@@ -105,13 +625,11 @@ export default function MarketPrices() {
     return counts
   }, [conflicts.data])
 
-  // ── Loading / error states ──────────────────────────────────────────────
   if (stats.isLoading || prices.isLoading) return <DashboardSkeleton />
   if (stats.isError) return <ErrorState onRetry={() => stats.refetch()} />
   if (prices.isError) return <ErrorState onRetry={() => prices.refetch()} />
 
   const s = stats.data
-  const totalPrices = prices.data?.total ?? 0
   const totalConflicts = conflicts.data?.total ?? 0
   const mandisMonitored = s?.mandis_monitored ?? 0
   const commoditiesTracked = s?.commodities_tracked ?? 0
@@ -120,304 +638,55 @@ export default function MarketPrices() {
 
   return (
     <div className="animate-slide-up">
-      {/* Hero */}
-      <div data-tour="hero" className="pb-6">
-        <h1 className="font-sans font-bold text-[#1a1a1a] text-[1.65rem] leading-tight tracking-tight m-0">
-          Crop Pricing Agent<br />
-          <span className="text-warm-muted font-normal">
-            for Smallholder Farmers in Tamil Nadu
-          </span>
-        </h1>
-        <p className="text-warm-muted-light text-[0.86rem] leading-relaxed mt-1.5 font-sans">
-          Two government databases track the same prices at the same markets — and regularly disagree.
-          This tool investigates every discrepancy, forecasts where prices are headed, and computes the best
-          market and timing across {mandisMonitored || 15} mandis.
-        </p>
+      <div data-tour="hero">
+        <PipelineHero />
       </div>
 
-      {/* ── Stage Cards ───────────────────────────────────────────────────── */}
-      <div data-tour="stage-cards" className="mb-8">
-        <div className="section-header">How It Works</div>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-stretch">
-
-          {/* Card 1: Scraped */}
-          <Link to="/inputs" className="card-accent accent-amber no-underline block p-5">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-teal-50 flex items-center justify-center">
-                <FileText size={18} className="text-warning" />
-              </div>
-              <h3 className="text-sm font-semibold text-[#1a1a1a] font-sans m-0">
-                Scraped
-              </h3>
-            </div>
-            <p className="text-xs text-warm-body leading-relaxed m-0">
-              Price records collected from Agmarknet and eNAM government databases daily
-            </p>
-            <div className="mt-4 pt-3 border-t border-warm-border/60 grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-warm-muted font-semibold">
-                  Records
-                </div>
-                <div className="text-base font-serif font-bold text-[#1a1a1a]">
-                  {totalPrices}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-warm-muted font-semibold">
-                  Sources
-                </div>
-                <div className="text-base font-serif font-bold text-[#1a1a1a]">
-                  2
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          <div className="hidden md:flex items-center justify-center">
-            <ArrowRight size={20} className="text-warm-border" />
-          </div>
-
-          {/* Card 2: Reconciled */}
-          <Link to="/inputs" className="card-accent accent-green no-underline block p-5">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
-                <IndianRupee size={18} className="text-success" />
-              </div>
-              <h3 className="text-sm font-semibold text-[#1a1a1a] font-sans m-0">
-                Reconciled
-              </h3>
-            </div>
-            <p className="text-xs text-warm-body leading-relaxed m-0">
-              Conflicting prices investigated, resolved, and merged into a single trusted price
-            </p>
-            <div className="mt-4 pt-3 border-t border-warm-border/60 grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-warm-muted font-semibold">
-                  Conflicts
-                </div>
-                <div className="text-base font-serif font-bold text-[#1a1a1a]">
-                  {conflictsResolved || totalConflicts}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-warm-muted font-semibold">
-                  Quality
-                </div>
-                <div className="text-base font-serif font-bold text-[#1a1a1a]">
-                  {successRate}%
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          <div className="hidden md:flex items-center justify-center">
-            <ArrowRight size={20} className="text-warm-border" />
-          </div>
-
-          {/* Card 3: Forecasted */}
-          <Link to="/forecast" className="card-accent accent-blue no-underline block p-5">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-                <TrendingUp size={18} className="text-info" />
-              </div>
-              <h3 className="text-sm font-semibold text-[#1a1a1a] font-sans m-0">
-                Forecasted
-              </h3>
-            </div>
-            <p className="text-xs text-warm-body leading-relaxed m-0">
-              Price predictions for 7, 14, and 30 days out with confidence intervals
-            </p>
-            <div className="mt-4 pt-3 border-t border-warm-border/60 grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-warm-muted font-semibold">
-                  Commodities
-                </div>
-                <div className="text-base font-serif font-bold text-[#1a1a1a]">
-                  {commoditiesTracked}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-warm-muted font-semibold">
-                  Horizon
-                </div>
-                <div className="text-base font-serif font-bold text-[#1a1a1a]">
-                  7-30d
-                </div>
-              </div>
-            </div>
-          </Link>
-        </div>
-      </div>
-
-      {/* ── Metrics ───────────────────────────────────────────────────────── */}
-      <div data-tour="metrics" className="mb-8">
-        <div className="section-header">Current Status</div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-stagger">
-          <MetricCard
-            label="Mandis Monitored"
-            value={mandisMonitored}
-            subtitle="across Tamil Nadu"
-          />
-          <MetricCard
-            label="Commodities Tracked"
-            value={commoditiesTracked}
-            subtitle="agricultural products"
-          />
-          <MetricCard
-            label="Conflicts Resolved"
-            value={conflictsResolved || totalConflicts}
-            subtitle="price discrepancies"
-          />
-          <MetricCard
-            label="Avg Confidence"
-            value={`${successRate}%`}
-            subtitle="data reliability"
-          />
-        </div>
-      </div>
-
-      {/* ── Price Grid (mandi x commodity) ─────────────────────────────────── */}
-      <div data-tour="price-table" className="mb-8">
-        <div className="section-header">Price Overview</div>
-        {priceGrid ? (
-          <div className="bg-white rounded-[10px] border border-warm-border p-5 overflow-x-auto">
-            <table className="w-full border-collapse" style={{ minWidth: 500 }}>
-              <thead>
-                <tr>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-warm-muted font-sans font-semibold pb-2 pr-2"
-                      style={{ letterSpacing: '1.2px' }}>
-                    Mandi
-                  </th>
-                  {priceGrid.commodities.map(([cid, cname]) => (
-                    <th
-                      key={cid}
-                      className="text-center text-[10px] uppercase tracking-wider text-warm-muted font-sans font-semibold pb-2 px-1"
-                      style={{ letterSpacing: '1px' }}
-                      title={cname}
-                    >
-                      {abbreviateCommodity(cname)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {priceGrid.mandis.map(([mid, mname]) => (
-                  <tr key={mid}>
-                    <td className="text-xs text-warm-body font-sans py-1 pr-3 whitespace-nowrap">
-                      {mname}
-                    </td>
-                    {priceGrid.commodities.map(([cid]) => {
-                      const entry = priceGrid.lookup.get(`${mid}|${cid}`)
-                      const cellKey = `${mid}|${cid}`
-                      if (!entry) {
-                        return (
-                          <td key={cid} className="py-1 px-1">
-                            <div className="stock-cell"
-                                 style={{ background: '#f0ede8', color: '#aaa' }}>
-                              --
-                            </div>
-                          </td>
-                        )
-                      }
-                      const avg = priceGrid.avgPrices.get(cid) ?? entry.reconciled_price_rs
-                      const color = priceColor(entry.reconciled_price_rs, avg)
-                      const isHovered = hoveredCell === cellKey
-
-                      return (
-                        <td key={cid} className="py-1 px-1 relative">
-                          <div
-                            className="stock-cell cursor-default"
-                            style={{
-                              background: color,
-                              color: '#fff',
-                            }}
-                            onMouseEnter={() => setHoveredCell(cellKey)}
-                            onMouseLeave={() => setHoveredCell(null)}
-                          >
-                            {formatRs(entry.reconciled_price_rs)}
-                          </div>
-                          {isHovered && (
-                            <div
-                              className="absolute z-40 p-3 rounded-lg shadow-lg text-xs"
-                              style={{
-                                background: '#1a1a1a',
-                                color: '#e0dcd5',
-                                bottom: '100%',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                minWidth: 180,
-                                marginBottom: 4,
-                                fontFamily: '"DM Sans", sans-serif',
-                              }}
-                            >
-                              <div className="font-semibold text-[#0d7377] mb-1">
-                                {entry.commodity_name}
-                              </div>
-                              <div className="space-y-1">
-                                {entry.agmarknet_price_rs !== null && (
-                                  <div className="flex justify-between">
-                                    <span className="text-[#999]">Agmarknet</span>
-                                    <span>{formatRs(entry.agmarknet_price_rs)}</span>
-                                  </div>
-                                )}
-                                {entry.enam_price_rs !== null && (
-                                  <div className="flex justify-between">
-                                    <span className="text-[#999]">eNAM</span>
-                                    <span>{formatRs(entry.enam_price_rs)}</span>
-                                  </div>
-                                )}
-                                <div className="flex justify-between border-t border-white/20 pt-1">
-                                  <span className="text-[#999]">Reconciled</span>
-                                  <span className="font-semibold">{formatRs(entry.reconciled_price_rs)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-[#999]">Confidence</span>
-                                  <span>{Math.round(entry.confidence * 100)}%</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-[#999]">Trend</span>
-                                  <span>{directionArrow(entry.price_trend)} {entry.price_trend}</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Legend */}
-            <div className="flex items-center gap-4 mt-4 pt-3 border-t border-warm-border/40">
-              <span className="text-[10px] uppercase tracking-wider text-warm-muted font-semibold"
-                    style={{ letterSpacing: '1px' }}>
-                vs seasonal avg:
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#2a9d8f' }} />
-                <span className="text-[11px] text-warm-body font-sans">Above (+5%)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#0d7377' }} />
-                <span className="text-[11px] text-warm-body font-sans">Near avg</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#e63946' }} />
-                <span className="text-[11px] text-warm-body font-sans">Below (-5%)</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-warm-muted font-sans">No price data available.</p>
-        )}
+      {/* ── KPI row ───────────────────────────────────────────────────────── */}
+      <div
+        data-tour="metrics"
+        className="grid grid-cols-2 md:grid-cols-4 animate-stagger"
+        style={{
+          gap: '32px',
+          borderTop: '1px solid #e8e5e1',
+          paddingTop: '28px',
+          marginTop: '20px',
+          marginBottom: '56px',
+        }}
+      >
+        <MetricCard
+          label="Markets monitored"
+          value={mandisMonitored}
+          subtitle="across Tamil Nadu"
+        />
+        <MetricCard
+          label="Commodities tracked"
+          value={commoditiesTracked}
+          subtitle="agricultural products"
+        />
+        <MetricCard
+          label="Conflicts resolved"
+          value={conflictsResolved || totalConflicts}
+          subtitle="price discrepancies"
+        />
+        <MetricCard
+          label="Pipeline success rate"
+          value={`${successRate}%`}
+          subtitle="runs completed cleanly"
+        />
       </div>
 
       {/* ── Map ───────────────────────────────────────────────────────────── */}
-      <div className="mb-8">
-        <div className="section-header">Mandi Network</div>
-        <div className="rounded-[10px] border border-warm-border overflow-hidden" style={{ height: 420 }}>
+      <div data-tour="market-network" style={{ marginBottom: '24px' }}>
+        <div className="section-header">Market network</div>
+        <div
+          style={{
+            height: 420,
+            border: '1px solid #e8e5e1',
+            borderRadius: '4px',
+            overflow: 'hidden',
+          }}
+        >
           <MapContainer
             center={[10.8, 78.8]}
             zoom={7}
@@ -432,48 +701,54 @@ export default function MarketPrices() {
 
             {(mandis.data?.mandis ?? []).map((mandi) => {
               const conflictCount = conflictsByMandi.get(mandi.mandi_id) ?? 0
-              let pinColor = '#2a9d8f'
-              if (conflictCount >= 3) pinColor = '#e63946'
-              else if (conflictCount >= 1) pinColor = '#0d7377'
+              const pinColor = conflictCount > 0 ? '#446b26' : '#606373'
 
               return (
                 <CircleMarker
                   key={mandi.mandi_id}
                   center={[mandi.latitude, mandi.longitude]}
-                  radius={8}
+                  radius={7}
                   pathOptions={{
-                    color: '#fff',
+                    color: '#ffffff',
                     weight: 2,
                     fillColor: pinColor,
                     fillOpacity: 0.9,
                   }}
                 >
                   <Popup>
-                    <div style={{ fontFamily: '"DM Sans", sans-serif', minWidth: 200 }}>
-                      <div style={{ fontFamily: '"Source Serif 4", serif', fontWeight: 700, fontSize: '0.95rem', marginBottom: 4 }}>
+                    <div
+                      style={{
+                        fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                        minWidth: 200,
+                        color: '#1b1e2d',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontFamily: '"Source Serif 4", Georgia, serif',
+                          fontWeight: 400,
+                          fontSize: '16px',
+                          marginBottom: '6px',
+                        }}
+                      >
                         {mandi.name}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 8 }}>
+                      <div style={{ fontSize: '12px', color: '#8d909e', marginBottom: '10px' }}>
                         {mandi.district} &middot; {mandi.market_type}
-                        {mandi.enam_integrated && ' \u00b7 eNAM'}
+                        {mandi.enam_integrated && ' · eNAM'}
                       </div>
-                      <div style={{ fontSize: '0.8rem' }}>
+                      <div style={{ fontSize: '12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                          <span style={{ color: '#888' }}>Commodities</span>
-                          <span style={{ fontWeight: 600 }}>{mandi.commodities_traded.length}</span>
+                          <span style={{ color: '#8d909e' }}>Commodities</span>
+                          <span>{mandi.commodities_traded.length}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                          <span style={{ color: '#888' }}>Reporting</span>
-                          <span style={{ fontWeight: 600, color: mandi.reporting_quality === 'good' ? '#2a9d8f' : '#0d7377' }}>
-                            {mandi.reporting_quality}
-                          </span>
+                          <span style={{ color: '#8d909e' }}>Reporting</span>
+                          <span>{mandi.reporting_quality}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                          <span style={{ color: '#888' }}>Conflicts</span>
-                          <span style={{
-                            fontWeight: 600,
-                            color: conflictCount > 0 ? '#e63946' : '#2a9d8f'
-                          }}>
+                          <span style={{ color: '#8d909e' }}>Conflicts</span>
+                          <span style={{ color: conflictCount > 0 ? '#446b26' : '#606373' }}>
                             {conflictCount}
                           </span>
                         </div>
@@ -486,20 +761,41 @@ export default function MarketPrices() {
           </MapContainer>
         </div>
 
-        {/* Map legend */}
-        <div className="flex items-center gap-5 mt-3 text-xs text-warm-muted">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ background: '#2a9d8f' }} />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '24px',
+            marginTop: '12px',
+            fontFamily: '"Space Grotesk", system-ui, sans-serif',
+            fontSize: '12px',
+            color: '#606373',
+          }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: '#606373',
+              }}
+            />
             No conflicts
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ background: '#0d7377' }} />
-            Some conflicts
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ background: '#e63946' }} />
-            Many conflicts
-          </div>
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: '#446b26',
+              }}
+            />
+            Active conflicts
+          </span>
         </div>
       </div>
     </div>

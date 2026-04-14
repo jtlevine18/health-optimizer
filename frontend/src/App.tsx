@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Routes, Route, useNavigate, useSearchParams } from 'react-router-dom'
+import { Routes, Route, useNavigate } from 'react-router-dom'
 import Joyride, { type CallBackProps, STATUS, EVENTS, ACTIONS } from 'react-joyride'
-import { Package } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import MarketPrices from './pages/MarketPrices'
 import Forecast from './pages/Forecast'
@@ -14,8 +13,6 @@ import TourTooltip from './components/TourTooltip'
 
 /**
  * Wait for the target element of a tour step to exist in the DOM.
- * Polls on requestAnimationFrame, capped at `timeoutMs` (~3s default).
- * Resolves once the element is found or the timeout is reached.
  */
 function waitForTourTarget(stepIdx: number, timeoutMs = 3000): Promise<void> {
   const step = tourSteps[stepIdx]
@@ -39,26 +36,11 @@ function waitForTourTarget(stepIdx: number, timeoutMs = 3000): Promise<void> {
 }
 
 export default function App() {
-  const [searchParams] = useSearchParams()
   const [runTour, setRunTour] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
   const navigate = useNavigate()
 
-  // Auto-start on first visit, or when ?tour=true
-  useEffect(() => {
-    const forced = searchParams.get('tour') === 'true'
-    const seen = localStorage.getItem('market_tour_v2') === '1'
-    if (forced || !seen) {
-      const timer = setTimeout(() => {
-        setRunTour(true)
-        setStepIndex(0)
-        localStorage.setItem('market_tour_v2', '1')
-      }, 1500)
-      return () => clearTimeout(timer)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Listen for relaunch from the Tour button
+  // Listen for a manual relaunch event. Autostart is disabled by default.
   useEffect(() => {
     function handleRelaunch() {
       navigate('/')
@@ -87,16 +69,12 @@ export default function App() {
         const currentRoute = stepRoutes[index]
         const needsNav = nextRoute !== undefined && nextRoute !== currentRoute
 
-        // Pause the tour while we navigate + wait for the target element to mount.
         setRunTour(false)
 
         if (needsNav) {
           navigate(nextRoute!)
         }
 
-        // Poll for the next step's target to exist (capped at 3s). This avoids
-        // highlighting invisible elements on slow-mounting routes and makes the
-        // same-route transition feel instant when the target is already there.
         waitForTourTarget(nextIndex, 3000).then(() => {
           setStepIndex(nextIndex)
           setRunTour(true)
@@ -107,22 +85,11 @@ export default function App() {
   )
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" style={{ background: '#ffffff' }}>
       <Sidebar />
 
       <div className="flex-1 ml-56 flex flex-col">
-        <header className="flex items-center justify-end h-10 px-8 shrink-0">
-          <button
-            onClick={() => window.dispatchEvent(new Event('relaunch-tour'))}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-sans font-medium text-warm-muted hover:text-[#1a1a1a] hover:bg-warm-header-bg transition-colors"
-            title="Take the guided tour"
-          >
-            <Package size={14} />
-            Tour
-          </button>
-        </header>
-
-        <main className="flex-1 px-8 pb-8">
+        <main className="flex-1 px-6 sm:px-10 lg:px-14 pt-16 pb-16" style={{ maxWidth: '1180px' }}>
           <Routes>
             <Route path="/" element={<MarketPrices />} />
             <Route path="/forecast" element={<Forecast />} />

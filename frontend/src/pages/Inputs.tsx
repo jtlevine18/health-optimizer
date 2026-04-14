@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import MetricCard from '../components/MetricCard'
 import { LoadingSpinner, ErrorState } from '../components/LoadingState'
+import { PriceGrid } from '../components/PriceGrid'
 import {
   usePriceConflicts,
   useMarketPrices,
@@ -8,10 +9,10 @@ import {
 } from '../lib/api'
 import { formatRs } from '../lib/format'
 
-function deltaPctColor(pct: number): string {
-  if (pct >= 10) return '#e63946'
-  if (pct >= 5) return '#0d7377'
-  return '#2a9d8f'
+function deltaColor(pct: number): string {
+  if (pct >= 10) return '#c71f48'
+  if (pct >= 5) return '#446b26'
+  return '#606373'
 }
 
 export default function Inputs() {
@@ -23,263 +24,271 @@ export default function Inputs() {
   const totalPrices = prices.data?.total ?? 0
   const totalConflicts = conflicts.data?.total ?? 0
 
-  // ── Pick a sample conflict for the side-by-side view ────────────────────
   const sampleConflict = conflictList[0] ?? null
 
-  // ── Find matching price records for the sample conflict ─────────────────
   const samplePrices = useMemo(() => {
     if (!sampleConflict || !prices.data?.market_prices) return []
     return prices.data.market_prices.filter(
-      (p) => p.mandi_id === sampleConflict.mandi_id && p.commodity_id === sampleConflict.commodity_id,
+      (p) =>
+        p.mandi_id === sampleConflict.mandi_id &&
+        p.commodity_id === sampleConflict.commodity_id,
     )
   }, [sampleConflict, prices.data])
 
-  // ── Metrics ─────────────────────────────────────────────────────────────
   const sourcesCount = (stats.data?.data_sources ?? []).length || 2
-  const resolutionRate = totalConflicts > 0
-    ? Math.round((conflictList.filter((c) => c.reconciled_price > 0).length / totalConflicts) * 100)
-    : 100
+  const resolutionRate =
+    totalConflicts > 0
+      ? Math.round(
+          (conflictList.filter((c) => c.reconciled_price > 0).length / totalConflicts) *
+            100,
+        )
+      : 100
 
   if (conflicts.isLoading || prices.isLoading) return <LoadingSpinner />
   if (conflicts.isError) return <ErrorState onRetry={() => conflicts.refetch()} />
 
   return (
     <div className="animate-slide-up">
-      <div data-tour="inputs-title" className="pt-2 pb-6">
-        <h1 className="page-title">Data Sources</h1>
-        <p className="page-caption">
-          How conflicting government data gets reconciled into a single trusted price
+      <div data-tour="inputs-title" style={{ marginBottom: '20px' }}>
+        <h1 className="page-title">Data sources</h1>
+        <p className="page-caption" style={{ maxWidth: '620px' }}>
+          Two government databases report the same prices at the same markets, and disagree a meaningful fraction of the time. Here is how one conflict gets resolved into a single trusted number.
         </p>
       </div>
 
-      {/* ── Metrics ───────────────────────────────────────────────────────── */}
-      <div data-tour="inputs-metrics" className="mb-8">
-        <div className="section-header">Data Overview</div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-stagger">
-          <MetricCard
-            label="Price Records"
-            value={totalPrices}
-            subtitle="scraped today"
-          />
-          <MetricCard
-            label="Sources"
-            value={sourcesCount}
-            subtitle="Agmarknet + eNAM"
-          />
-          <MetricCard
-            label="Conflicts Found"
-            value={totalConflicts}
-            subtitle="price discrepancies"
-          />
-          <MetricCard
-            label="Resolution Rate"
-            value={`${resolutionRate}%`}
-            subtitle="auto-reconciled"
-          />
-        </div>
+      {/* ── KPI row ───────────────────────────────────────────── */}
+      <div
+        data-tour="inputs-metrics"
+        className="grid grid-cols-2 md:grid-cols-4 animate-stagger"
+        style={{
+          gap: '32px',
+          borderTop: '1px solid #e8e5e1',
+          paddingTop: '28px',
+          marginBottom: '56px',
+        }}
+      >
+        <MetricCard label="Price records" value={totalPrices} subtitle="scraped today" />
+        <MetricCard label="Sources" value={sourcesCount} subtitle="Agmarknet + eNAM" />
+        <MetricCard
+          label="Conflicts found"
+          value={totalConflicts}
+          subtitle="price discrepancies"
+        />
+        <MetricCard
+          label="Resolution rate"
+          value={`${resolutionRate}%`}
+          subtitle="auto-reconciled"
+        />
       </div>
 
-      {/* ── Side-by-side: Raw vs Reconciled ────────────────────────────────── */}
-      {sampleConflict && (
-        <div data-tour="inputs-reconciled" className="mb-8">
-          <div className="section-header">Example: Price Reconciliation</div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* ── Price overview ───────────────────────────────────── */}
+      <div style={{ marginBottom: '56px' }}>
+        <div className="section-header">Price overview &middot; reconciled, today</div>
+        <PriceGrid />
+      </div>
 
-            {/* LEFT: Raw conflicting data */}
-            <div className="space-y-4">
-              <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider m-0">
-                Raw Data (Conflicting)
+      {/* ── Worked example ────────────────────────────────────── */}
+      {sampleConflict && (
+        <div data-tour="inputs-reconciled" style={{ marginBottom: '56px' }}>
+          <div className="section-header">Worked example &middot; one reconciliation in full</div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '48px',
+              borderTop: '1px solid #e8e5e1',
+              paddingTop: '28px',
+            }}
+          >
+            {/* LEFT: conflicting reports */}
+            <div>
+              <div className="eyebrow">Raw reports</div>
+              <p
+                style={{
+                  fontFamily: '"Source Serif 4", Georgia, serif',
+                  fontSize: '22px',
+                  lineHeight: '30px',
+                  color: '#1b1e2d',
+                  marginTop: '12px',
+                  marginBottom: '20px',
+                  maxWidth: '480px',
+                }}
+              >
+                {sampleConflict.commodity_name || sampleConflict.commodity_id} at{' '}
+                {sampleConflict.mandi_name}
               </p>
 
-              {/* Agmarknet report */}
-              <div
-                className="rounded-lg p-5"
+              <table className="etable" style={{ marginBottom: '20px' }}>
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th className="num">Reported price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Agmarknet</td>
+                    <td className="num">{formatRs(sampleConflict.agmarknet_price)}</td>
+                  </tr>
+                  <tr>
+                    <td>eNAM</td>
+                    <td className="num">{formatRs(sampleConflict.enam_price)}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: '#606373' }}>Difference</td>
+                    <td
+                      className="num"
+                      style={{ color: deltaColor(sampleConflict.delta_pct || 0) }}
+                    >
+                      {(sampleConflict.delta_pct || 0).toFixed(1)}% &middot;{' '}
+                      {formatRs(
+                        Math.abs(sampleConflict.agmarknet_price - sampleConflict.enam_price),
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <p
                 style={{
-                  backgroundColor: '#fefae0',
-                  border: '1px solid #d4c89a',
-                  boxShadow: '2px 2px 8px rgba(0,0,0,0.06)',
+                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                  fontSize: '13px',
+                  fontStyle: 'italic',
+                  color: '#606373',
+                  maxWidth: '460px',
                 }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-[#1a1a1a] uppercase tracking-wider">Agmarknet</span>
-                  <span className="badge-amber text-[0.65rem]">Source A</span>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-warm-muted">Mandi</span>
-                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.mandi_name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-warm-muted">Commodity</span>
-                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.commodity_name || sampleConflict.commodity_id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-warm-muted">Price</span>
-                    <span className="font-serif font-bold text-lg text-[#1a1a1a]">
-                      {formatRs(sampleConflict.agmarknet_price)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* VS divider */}
-              <div className="flex items-center justify-center gap-3">
-                <div className="flex-1 h-px bg-warm-border" />
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0" style={{ background: '#0d7377' }}>
-                  VS
-                </div>
-                <div className="flex-1 h-px bg-warm-border" />
-              </div>
-
-              {/* eNAM report */}
-              <div
-                className="rounded-lg p-5"
-                style={{
-                  backgroundColor: '#f0f4ff',
-                  border: '1px solid #b8c9e8',
-                  boxShadow: '2px 2px 8px rgba(0,0,0,0.04)',
-                }}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-[#1a1a1a] uppercase tracking-wider">eNAM</span>
-                  <span className="badge-blue text-[0.65rem]">Source B</span>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-warm-muted">Mandi</span>
-                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.mandi_name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-warm-muted">Commodity</span>
-                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.commodity_name || sampleConflict.commodity_id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-warm-muted">Price</span>
-                    <span className="font-serif font-bold text-lg text-[#1a1a1a]">
-                      {formatRs(sampleConflict.enam_price)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Delta callout */}
-              <div
-                className="rounded-lg p-3 text-center"
-                style={{
-                  background: 'rgba(230, 57, 70, 0.06)',
-                  border: '1px solid rgba(230, 57, 70, 0.2)',
-                }}
-              >
-                <span className="text-xs text-warm-muted">Price difference: </span>
-                <span className="text-sm font-serif font-bold" style={{ color: deltaPctColor(sampleConflict.delta_pct || 0) }}>
-                  {(sampleConflict.delta_pct || 0).toFixed(1)}%
-                </span>
-                <span className="text-xs text-warm-muted">
-                  {' '}({formatRs(Math.abs(sampleConflict.agmarknet_price - sampleConflict.enam_price))})
-                </span>
-              </div>
+                When government databases disagree, an AI agent investigates and decides which
+                price to trust.
+              </p>
             </div>
 
-            {/* RIGHT: Reconciled result */}
-            <div className="space-y-4">
-              <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider m-0">
-                AI Reconciled
+            {/* RIGHT: Investigation + reconciled value */}
+            <div>
+              <div className="eyebrow">Reconciled price</div>
+              <p
+                className="metric-number"
+                style={{ marginTop: '8px', color: '#446b26' }}
+              >
+                {formatRs(sampleConflict.reconciled_price)}
               </p>
-
-              <div
-                className="rounded-lg p-5"
+              <p
                 style={{
-                  backgroundColor: '#f0faf8',
-                  border: '2px solid #2a9d8f',
+                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                  fontSize: '13px',
+                  color: '#606373',
+                  marginTop: '6px',
                 }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#2a9d8f' }}>
-                    Reconciled Price
-                  </span>
-                  <span className="badge-green text-[0.65rem]">{sampleConflict.resolution}</span>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-warm-muted">Mandi</span>
-                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.mandi_name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-warm-muted">Commodity</span>
-                    <span className="font-semibold text-[#1a1a1a]">{sampleConflict.commodity_name || sampleConflict.commodity_id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-warm-muted">Final price</span>
-                    <span className="font-serif font-bold text-xl" style={{ color: '#2a9d8f' }}>
-                      {formatRs(sampleConflict.reconciled_price)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Investigation steps — case file style */}
-              {sampleConflict.investigation_steps && (
-                <div className="card-accent accent-amber p-4">
-                  <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider mb-3 m-0">
-                    Agent Investigation
-                  </p>
-                  <div className="space-y-3">
-                    {sampleConflict.investigation_steps.map((step, i) => (
-                      <div key={i} className="flex gap-3 items-start">
-                        <div
-                          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[0.6rem] font-bold text-white"
-                          style={{ background: '#0d7377' }}
-                        >
-                          {i + 1}
-                        </div>
-                        <div className="flex-1">
-                          <code
-                            className="text-[0.7rem] font-mono font-semibold px-1.5 py-0.5 rounded"
-                            style={{ background: 'rgba(13,115,119,0.08)', color: '#0d7377' }}
-                          >
-                            {step.tool}
-                          </code>
-                          <p className="text-xs text-warm-body leading-relaxed m-0 mt-1">{step.finding}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-warm-border">
-                    <p className="text-xs font-semibold m-0" style={{ color: '#2a9d8f' }}>
-                      Decision: {sampleConflict.reasoning || sampleConflict.resolution || "—"}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Fallback: plain reasoning if no investigation steps */}
-              {!sampleConflict.investigation_steps && (
-                <div className="card-accent accent-amber p-4">
-                  <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider mb-2 m-0">
-                    AI Reasoning
-                  </p>
-                  <p className="text-sm text-warm-body leading-relaxed m-0">
-                    {sampleConflict.reasoning || sampleConflict.resolution || "—"}
-                  </p>
-                </div>
-              )}
-
-              {/* Context */}
-              <p className="text-xs italic text-warm-muted mt-3 m-0 leading-relaxed">
-                When government databases disagree, this system investigates and decides which price to trust.
+                {sampleConflict.resolution}
               </p>
 
-              {/* Related prices for this mandi/commodity */}
-              {samplePrices.length > 0 && (
-                <div className="card card-body">
-                  <p className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider mb-2 m-0">
-                    Full Price Record
+              {/* Investigation steps: vertical hairline list */}
+              {sampleConflict.investigation_steps &&
+                sampleConflict.investigation_steps.length > 0 && (
+                  <div style={{ marginTop: '28px' }}>
+                    <div className="eyebrow" style={{ marginBottom: '12px' }}>
+                      Agent investigation
+                    </div>
+                    <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {sampleConflict.investigation_steps.map((step, i) => (
+                        <li
+                          key={i}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '28px 1fr',
+                            gap: '16px',
+                            alignItems: 'flex-start',
+                            borderTop: '1px solid #e8e5e1',
+                            padding: '14px 0',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: '"Source Serif 4", Georgia, serif',
+                              fontSize: '15px',
+                              color: '#8d909e',
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                          >
+                            {String(i + 1).padStart(2, '0')}
+                          </span>
+                          <div>
+                            <code
+                              style={{
+                                fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#446b26',
+                                letterSpacing: '0.02em',
+                              }}
+                            >
+                              {step.tool}
+                            </code>
+                            <p
+                              style={{
+                                fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                                fontSize: '13px',
+                                lineHeight: 1.7,
+                                color: '#1b1e2d',
+                                margin: '4px 0 0 0',
+                              }}
+                            >
+                              {step.finding}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+              {sampleConflict.reasoning && (
+                <div
+                  style={{
+                    marginTop: '24px',
+                    borderLeft: '2px solid #446b26',
+                    paddingLeft: '16px',
+                  }}
+                >
+                  <div className="eyebrow">Decision</div>
+                  <p
+                    style={{
+                      fontFamily: '"Source Serif 4", Georgia, serif',
+                      fontSize: '15px',
+                      lineHeight: 1.7,
+                      color: '#1b1e2d',
+                      marginTop: '6px',
+                    }}
+                  >
+                    {sampleConflict.reasoning}
                   </p>
-                  <div className="space-y-1.5 text-sm">
+                </div>
+              )}
+
+              {samplePrices.length > 0 && (
+                <div style={{ marginTop: '28px' }}>
+                  <div className="eyebrow" style={{ marginBottom: '10px' }}>
+                    Full price record
+                  </div>
+                  <div style={{ borderTop: '1px solid #e8e5e1' }}>
                     {samplePrices.map((p, i) => (
-                      <div key={i} className="flex justify-between">
-                        <span className="text-warm-muted">{p.date}</span>
-                        <span className="font-semibold text-[#1a1a1a]">{formatRs(p.reconciled_price_rs)}</span>
+                      <div
+                        key={i}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '10px 0',
+                          borderBottom: '1px solid #f2efeb',
+                          fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                          fontSize: '13px',
+                        }}
+                      >
+                        <span style={{ color: '#606373' }}>{p.date}</span>
+                        <span style={{ color: '#1b1e2d', fontVariantNumeric: 'tabular-nums' }}>
+                          {formatRs(p.reconciled_price_rs)}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -290,52 +299,46 @@ export default function Inputs() {
         </div>
       )}
 
-      {/* ── All Conflicts ──────────────────────────────────────────────────── */}
-      <div className="mb-8">
-        <div className="section-header">All Price Conflicts</div>
+      {/* ── All Conflicts ──────────────────────────────────────── */}
+      <div style={{ marginBottom: '56px' }}>
+        <div className="section-header">All price conflicts</div>
         {conflictList.length === 0 ? (
-          <p className="text-sm text-warm-muted font-sans">No price conflicts detected.</p>
+          <p className="eyebrow">No price conflicts detected</p>
         ) : (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Mandi</th>
-                  <th>Commodity</th>
-                  <th>Agmarknet</th>
-                  <th>eNAM</th>
-                  <th>Delta</th>
-                  <th>Resolution</th>
-                  <th>Reconciled</th>
-                  <th>Reasoning</th>
+          <table className="etable">
+            <thead>
+              <tr>
+                <th>Market</th>
+                <th>Commodity</th>
+                <th className="num">Agmarknet</th>
+                <th className="num">eNAM</th>
+                <th className="num">Delta</th>
+                <th className="num">Reconciled</th>
+                <th>Reasoning</th>
+              </tr>
+            </thead>
+            <tbody>
+              {conflictList.map((c, i) => (
+                <tr key={`${c.mandi_id}-${c.commodity_id}-${i}`}>
+                  <td style={{ fontWeight: 500 }}>{c.mandi_name}</td>
+                  <td>{c.commodity_name || c.commodity_id}</td>
+                  <td className="num">{formatRs(c.agmarknet_price)}</td>
+                  <td className="num">{formatRs(c.enam_price)}</td>
+                  <td className="num" style={{ color: deltaColor(c.delta_pct || 0) }}>
+                    {(c.delta_pct || 0).toFixed(1)}%
+                  </td>
+                  <td className="num" style={{ color: '#446b26' }}>
+                    {formatRs(c.reconciled_price)}
+                  </td>
+                  <td style={{ maxWidth: 280, color: '#606373' }}>
+                    {(c.reasoning || c.resolution || '—').length > 100
+                      ? (c.reasoning || '').slice(0, 100) + '…'
+                      : c.reasoning || c.resolution || '—'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {conflictList.map((c, i) => (
-                  <tr key={`${c.mandi_id}-${c.commodity_id}-${i}`}>
-                    <td className="font-semibold text-[#1a1a1a]">{c.mandi_name}</td>
-                    <td>{c.commodity_name || c.commodity_id}</td>
-                    <td>{formatRs(c.agmarknet_price)}</td>
-                    <td>{formatRs(c.enam_price)}</td>
-                    <td>
-                      <span className="font-semibold" style={{ color: deltaPctColor(c.delta_pct || 0) }}>
-                        {(c.delta_pct || 0).toFixed(1)}%
-                      </span>
-                    </td>
-                    <td>
-                      <span className="badge-amber text-[0.65rem]">{c.resolution || 'auto'}</span>
-                    </td>
-                    <td className="font-semibold" style={{ color: '#2a9d8f' }}>
-                      {formatRs(c.reconciled_price)}
-                    </td>
-                    <td className="text-xs text-warm-body max-w-xs">
-                      {(c.reasoning || c.resolution || '—').length > 100 ? (c.reasoning || '').slice(0, 100) + '\u2026' : (c.reasoning || c.resolution || '—')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>

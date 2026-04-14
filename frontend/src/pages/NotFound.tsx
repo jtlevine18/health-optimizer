@@ -10,20 +10,20 @@ export default function NotFound() {
         </p>
       </div>
 
-      <div className="card card-body" style={{ maxWidth: 560 }}>
-        <p className="text-sm text-warm-body m-0 mb-4 leading-relaxed">
-          Double-check the URL, or head back to the dashboard to see current
-          mandi prices, forecasts, and sell recommendations.
-        </p>
-        <Link
-          to="/"
-          className="inline-flex items-center text-xs font-sans font-semibold uppercase tracking-wider"
+      <div style={{ maxWidth: 560, paddingTop: '8px' }}>
+        <p
           style={{
-            color: '#0d7377',
-            letterSpacing: '0.5px',
-            textDecoration: 'none',
+            fontFamily: '"Space Grotesk", system-ui, sans-serif',
+            fontSize: '14px',
+            color: '#606373',
+            marginBottom: '20px',
+            lineHeight: 1.7,
           }}
         >
+          Double-check the URL, or head back to the dashboard to see current
+          market prices, forecasts, and sell recommendations.
+        </p>
+        <Link to="/" className="text-link">
           Back to dashboard &rarr;
         </Link>
       </div>

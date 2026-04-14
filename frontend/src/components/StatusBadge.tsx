@@ -3,30 +3,36 @@ interface Props {
   className?: string
 }
 
-const STATUS_MAP: Record<string, { className: string; label?: string }> = {
-  critical: { className: 'badge-red' },
-  high: { className: 'badge-dark-orange' },
-  moderate: { className: 'badge-orange' },
-  low: { className: 'badge-green' },
-  none: { className: 'badge-slate' },
-  good: { className: 'badge-green' },
-  poor: { className: 'badge-red' },
-  ok: { className: 'badge-green' },
-  success: { className: 'badge-green' },
-  active: { className: 'badge-green' },
-  partial: { className: 'badge-amber' },
-  failed: { className: 'badge-red' },
-  running: { className: 'badge-blue' },
-  pending: { className: 'badge-slate' },
+const STATUS_COLOR: Record<string, string> = {
+  critical: '#c71f48',
+  high: '#2d4a1a',
+  moderate: '#446b26',
+  low: '#4a7c59',
+  none: '#606373',
+  good: '#4a7c59',
+  poor: '#c71f48',
+  ok: '#4a7c59',
+  success: '#4a7c59',
+  active: '#4a7c59',
+  partial: '#446b26',
+  failed: '#c71f48',
+  running: '#1b1e2d',
+  pending: '#606373',
 }
 
 export default function StatusBadge({ status, className = '' }: Props) {
-  const config = STATUS_MAP[status] ?? { className: 'badge-slate' }
-  const label = config.label ?? status
-
+  const color = STATUS_COLOR[status] ?? '#606373'
   return (
-    <span className={`${config.className} ${className}`}>
-      {label}
+    <span
+      className={className}
+      style={{
+        fontFamily: '"Space Grotesk", system-ui, sans-serif',
+        fontSize: '12px',
+        fontWeight: 500,
+        color,
+      }}
+    >
+      {status}
     </span>
   )
 }
