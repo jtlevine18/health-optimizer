@@ -19,7 +19,7 @@ Vercel (always on) → serverless API reads from → Neon → serves frontend
 
 **6-step pipeline:** `INGEST → EXTRACT → RECONCILE → FORECAST → OPTIMIZE → RECOMMEND`
 
-Each step has Claude agent + rule-based fallback. Pipeline runs end-to-end without Claude (set `ANTHROPIC_API_KEY` to enable). Real Agmarknet data from data.gov.in (set `MARKET_INTEL_USE_REAL_API=1`). Real NASA POWER weather for all 15 mandis.
+Each step has Claude agent + rule-based fallback. Pipeline runs end-to-end without Claude (set `ANTHROPIC_API_KEY` to enable). Real Agmarknet data from data.gov.in is the default; set `MARKET_INTEL_DEMO_MODE=1` to fall back to deterministic seed=42 demo prices. Real NASA POWER weather for all 15 markets.
 
 ### Pipeline steps
 1. **INGEST** — Agmarknet API (data.gov.in), eNAM scraper (simulated), NASA POWER weather (~68s with real API)
@@ -78,17 +78,29 @@ frontend/api/model-info.ts         — Static model metadata
 
 ### Frontend (React 18, TypeScript, Vite, Tailwind)
 ```
-frontend/src/pages/MarketPrices.tsx — Price grid (mandi x commodity) + Tamil Nadu map + hook callout
+frontend/src/pages/MarketPrices.tsx — Home dashboard: live market prices hero + Tamil Nadu map + reconciliation callout
 frontend/src/pages/Forecast.tsx     — Price forecast charts with Chronos confidence bands
 frontend/src/pages/SellOptimizer.tsx — Farmer cards + horizontal cost breakdown + credit readiness + map
-frontend/src/pages/Pipeline.tsx     — 6-step architecture view + run history
-frontend/src/pages/Inputs.tsx       — Side-by-side reconciliation with investigation steps
+frontend/src/pages/Pipeline.tsx     — How It Works: 4-category stack (Data / Models / Delivery / Infrastructure) + 3 tabs (Run history / Cost & scale / Build your own)
+frontend/src/pages/Inputs.tsx       — Data page: price grid (market x commodity) + side-by-side reconciliation with investigation steps
 frontend/src/lib/api.ts             — Types + React Query hooks
-frontend/src/lib/tour.ts            — Joyride tour (12 steps, story-driven, teal accent)
+frontend/src/lib/tour.ts            — Joyride tour (12 steps, story-driven, forest green accent)
 frontend/src/components/TourTooltip.tsx — Custom tooltip with step counter
-frontend/src/components/Sidebar.tsx — Nav with deep teal (#0d7377) accent
-frontend/src/regionConfig.ts       — All geography strings (currency, language, map center, labels)
+frontend/src/components/Sidebar.tsx — Nav with forest green (#446b26) accent; brand "Crop pricing agent"
 ```
+
+## Portfolio UI design language
+
+Post-reskin the frontend uses an editorial look:
+- Typography: Source Serif 4 (headings, `.page-title` 28px) + Space Grotesk (body)
+- Palette: cream `#fcfaf7`, ink `#1b1e2d`, slate `#606373`, hairline `#e8e5e1`
+- Accent: forest green `#446b26`
+- Sidebar brand: **Crop pricing agent**
+- No eyebrow labels above `<h1>` page titles; all pages use the shared `.page-title` class
+- Output cards have `max-height: 240px` + `overflow: hidden` so live data can't push past page height
+- Grid columns use `minmax(0, Nfr)` for truncation
+- Tour tooltip accent follows the forest green identity
+- **How It Works** (`Pipeline.tsx`): h1 only (no caption), 4-category stack (Data / Models / Delivery / Infrastructure), 3 tabs — Run history / Cost & scale / Build your own
 
 ## Running locally
 
@@ -108,14 +120,14 @@ Frontend proxies `/api/*` to localhost:7860 via vite.config.ts. Alternatively se
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `ANTHROPIC_API_KEY` | Claude agents for extraction/reconciliation/recommendation | None (rule-based fallback) |
-| `MARKET_INTEL_USE_REAL_API` | Enable real Agmarknet API (set to `1`) | Disabled (demo data) |
+| `MARKET_INTEL_DEMO_MODE` | Force deterministic seed=42 demo prices (eNAM returns empty in live mode) | Disabled (live API is the default) |
 | `DATA_GOV_IN_API_KEY` | data.gov.in API key | Public default key |
 | `DATABASE_URL` | Neon PostgreSQL connection (backend + Vercel serverless) | None (in-memory demo) |
 
 ## Data sources
 
 - **Agmarknet** (data.gov.in) — Real daily wholesale prices for Tamil Nadu mandis. Commodity names: Paddy, Groundnut, Turmeric(Finger), Cotton, Coconut, Maize, Urad (Black Gram), Moong(Green Gram), Onion, Banana. API returns current-day data only (no historical date filters).
-- **eNAM** — Simulated with realistic 3-12% price divergence from Agmarknet. Real scraper skeleton exists.
+- **eNAM** — No real scraper available; returns empty in live mode (reconciliation falls back to Agmarknet-only path). Demo mode generates simulated prices with 3-12% divergence from Agmarknet.
 - **NASA POWER** — Real daily weather for all 15 mandi locations (temperature, precipitation, humidity).
 
 ## Neon PostgreSQL
@@ -162,9 +174,8 @@ This pipeline is designed to be forked. See [REBUILD.md](REBUILD.md) for the ful
 | `src/reconciliation/agent.py` | Claude prompt references region |
 | `src/recommendation_agent.py` | Translation language, Claude prompt |
 | `src/rag/knowledge_base.py` | 27 chunks of region-specific knowledge |
-| `frontend/src/regionConfig.ts` | Currency, language, map center, labels |
 | `frontend/src/lib/tour.ts` | Guided tour narrative |
-| `frontend/api/*.ts` | Mandi/commodity name maps (static lookups) |
+| `frontend/api/*.ts` | Market/commodity name maps (static lookups) |
 
 ### Globally portable files (no changes needed)
 
@@ -173,6 +184,7 @@ This pipeline is designed to be forked. See [REBUILD.md](REBUILD.md) for the ful
 ## Important conventions
 
 - All prices in Indian Rupees (Rs or ₹), per quintal
+- User-visible strings prefer "market" to "mandi" (internal code and DB columns keep `mandi_id` since it's the accurate Indian term)
 - Demo data is deterministic (seed=42) and tells a coherent story about March 2026 Tamil Nadu markets
 - CORS is set to `allow_origins=["*"]` for local development
 - Chronos-Bolt-Tiny (8MB) pre-downloaded in Docker image. Loads from disk on restart (~2s). First inference run trains XGBoost from scratch (~60-90s), subsequent runs load saved model.
