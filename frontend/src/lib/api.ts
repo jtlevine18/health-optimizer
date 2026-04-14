@@ -9,9 +9,6 @@ import {
   priceForecastsResponse,
   sellRecommendationsResponse,
   priceConflictsResponse,
-  rawInputsResponse,
-  extractedDataResponse,
-  reconciledDataResponse,
   modelInfoResponse,
   deliveryLogsResponse,
   pipelineRunsResponse,
@@ -357,30 +354,6 @@ export function usePriceConflicts() {
   return useQuery<PriceConflictsResponse>({
     queryKey: ['price-conflicts'],
     queryFn: () => fetchJson<PriceConflictsResponse>('/api/price-conflicts'),
-    staleTime: STALE_5MIN,
-  })
-}
-
-export function useRawInputs() {
-  return useQuery<RawInputsResponse>({
-    queryKey: ['raw-inputs'],
-    queryFn: () => mock(rawInputsResponse, 220),
-    staleTime: STALE_5MIN,
-  })
-}
-
-export function useExtractedData() {
-  return useQuery<ExtractedDataResponse>({
-    queryKey: ['extracted-data'],
-    queryFn: () => mock(extractedDataResponse, 240),
-    staleTime: STALE_5MIN,
-  })
-}
-
-export function useReconciledData() {
-  return useQuery<ReconciledDataResponse>({
-    queryKey: ['reconciled-data'],
-    queryFn: () => mock(reconciledDataResponse, 260),
     staleTime: STALE_5MIN,
   })
 }
