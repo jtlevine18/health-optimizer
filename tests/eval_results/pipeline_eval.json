@@ -1,7 +1,7 @@
 {
-  "run_id": "aad34c62",
+  "run_id": "3cfed6a1",
   "status": "ok",
-  "duration_s": 5.34,
+  "duration_s": 4.4,
   "step_status": {
     "ingest": "ok",
     "extract": "ok",

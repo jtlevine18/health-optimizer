@@ -605,6 +605,18 @@ class MarketIntelligencePipeline:
         """Compute sell options for sample farmer locations."""
         t0 = time.time()
 
+        # Lazy-load DPI agent. Wrapped in try/except so a DPI import failure
+        # never blocks optimization — the credit readiness assessment just
+        # falls back to the rule-based path when the profile is None.
+        dpi_agent = None
+        try:
+            from src.dpi import get_agent
+            dpi_agent = get_agent()
+        except Exception as exc:
+            logger.warning("DPI agent unavailable, credit readiness will skip KCC data: %s", exc)
+
+        dpi_hits = 0
+
         try:
             for farmer in SAMPLE_FARMERS:
                 rec = optimize_sell(
@@ -617,10 +629,24 @@ class MarketIntelligencePipeline:
                 )
                 rec_dict = recommendation_to_dict(rec)
 
+                # DPI profile lookup — real Aadhaar / Land Record / KCC data
+                # for this farmer. When present, assess_credit_readiness uses
+                # actual KCC headroom as the loan ceiling instead of the
+                # projection-only 40% rule.
+                dpi_profile = None
+                if dpi_agent is not None:
+                    try:
+                        dpi_profile = dpi_agent.get_farmer_profile(farmer.farmer_id)
+                        if dpi_profile is not None:
+                            dpi_hits += 1
+                    except Exception as exc:
+                        logger.debug("DPI lookup failed for %s: %s", farmer.farmer_id, exc)
+
                 # Credit readiness — farmer-facing assessment
                 credit = assess_credit_readiness(
                     rec,
                     has_storage=farmer.has_storage,
+                    dpi_profile=dpi_profile,
                 )
                 rec_dict["credit_readiness"] = credit_readiness_to_dict(credit)
 
@@ -639,6 +665,7 @@ class MarketIntelligencePipeline:
                 details={
                     "farmers_optimized": len(self._sell_recommendations),
                     "total_options_computed": total_options,
+                    "dpi_profiles_used": dpi_hits,
                 },
             )
         except Exception as e:

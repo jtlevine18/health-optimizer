@@ -9,6 +9,10 @@ Recommends the optimal combination across space (which mandi) and time
 """
 
 from dataclasses import dataclass, field
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.dpi.models import FarmerProfile
 
 from config import (
     COMMODITY_MAP,
@@ -309,16 +313,39 @@ class CreditReadiness:
     risks: list[str]
     advice_en: str
     advice_ta: str            # Tamil placeholder
+    # DPI-aware fields — populated when a dpi_profile is passed in. Left
+    # zeroed when the farmer has no KCC on file, so the dashboard can
+    # tell the difference between "no DPI" and "checked DPI, zero KCC".
+    kcc_limit_rs: float = 0.0
+    kcc_outstanding_rs: float = 0.0
+    kcc_headroom_rs: float = 0.0
+    kcc_repayment_status: str = ""  # current / overdue / defaulted / ""
+    dpi_checked: bool = False
 
 
 def assess_credit_readiness(
     rec: SellRecommendation,
     has_storage: bool = True,
     typical_input_loan_rs: float | None = None,
+    dpi_profile: Optional["FarmerProfile"] = None,  # type: ignore[name-defined]
 ) -> CreditReadiness:
     """Assess whether a farmer should seek credit, based on her sell optimization.
 
     This is advice FOR THE FARMER, not a score for a lender.
+
+    When `dpi_profile` is provided, the assessment uses the farmer's real
+    Kisan Credit Card state (limit, outstanding, repayment status) and
+    their registered land records to sharpen the recommendation:
+
+      - Max advisable loan is capped at the KCC headroom, not just at
+        40% of projected revenue.
+      - KCC near-limit utilization downgrades the classification.
+      - Overdue or defaulted KCC status forces "not_yet".
+      - Registered land acreage that doesn't support the claimed yield
+        shows up as a risk.
+
+    When `dpi_profile` is None, the function falls back to the prior
+    rule-based behavior — pure projection from sell data.
     """
     if not rec.all_options or rec.best_option.net_price_rs <= 0:
         return CreditReadiness(
@@ -332,6 +359,7 @@ def assess_credit_readiness(
             risks=["No market data available to estimate harvest revenue"],
             advice_en="We don't have enough market data to assess your credit readiness right now. Check back after prices are available.",
             advice_ta="",
+            dpi_checked=dpi_profile is not None,
         )
 
     best = rec.best_option
@@ -343,8 +371,15 @@ def assess_credit_readiness(
     worst_net = min(o.net_price_rs for o in rec.all_options) if rec.all_options else best.net_price_rs
     min_revenue = worst_net * quantity
 
-    # Conservative: advisable loan is up to 40% of expected revenue
-    max_advisable = expected_revenue * 0.40
+    # Conservative baseline: advisable loan is up to 40% of expected revenue.
+    # When DPI is available, cap at the real KCC headroom instead — this is
+    # the central upgrade the DPI integration delivers.
+    projected_max = expected_revenue * 0.40
+    if dpi_profile is not None and dpi_profile.kcc is not None:
+        kcc_headroom = dpi_profile.kcc.headroom
+        max_advisable = min(projected_max, kcc_headroom)
+    else:
+        max_advisable = projected_max
 
     # If typical input loan provided, use it for comparison
     if typical_input_loan_rs is None:
@@ -383,8 +418,66 @@ def assess_credit_readiness(
     if len(now_options) < 2:
         risks.append("Few markets trading your commodity nearby")
 
+    # ── DPI-derived strengths and risks ──────────────────────────────────
+    # Land-area vs claimed-yield cross-checks are deliberately omitted: they
+    # require a commodity-specific yield table (rice 40 q/ha, banana 300 q/ha,
+    # pulses 7 q/ha) which would duplicate data from the DPI simulator. The
+    # value of the DPI integration lives in the KCC state below — that's
+    # where real lender decisions actually get made.
+    kcc_force_not_yet = False
+    kcc_limit = 0.0
+    kcc_outstanding = 0.0
+    kcc_headroom = 0.0
+    kcc_repayment = ""
+    if dpi_profile is not None:
+        # Commodity-vs-registration check: the rec's commodity should match
+        # something on the farmer's registered crops. Mismatch is low-stakes
+        # (crop rotations happen) but worth surfacing.
+        if dpi_profile.land_records and rec.commodity_id not in dpi_profile.primary_crops:
+            risks.append(
+                f"{rec.commodity_name} is not on your registered crop list — "
+                f"verify your land record before applying for input credit"
+            )
+
+        if dpi_profile.kcc is not None:
+            kcc_limit = dpi_profile.kcc.credit_limit
+            kcc_outstanding = dpi_profile.kcc.outstanding
+            kcc_headroom = dpi_profile.kcc.headroom
+            kcc_repayment = dpi_profile.kcc.repayment_status
+            util_pct = dpi_profile.kcc.utilization_pct
+
+            if kcc_repayment == "defaulted":
+                risks.append(
+                    f"KCC shows a prior default — most lenders will not extend "
+                    f"new credit until it's resolved"
+                )
+                kcc_force_not_yet = True
+            elif kcc_repayment == "overdue":
+                risks.append(
+                    f"KCC is overdue on your last payment — clear it before seeking new credit"
+                )
+            elif util_pct >= 85:
+                risks.append(
+                    f"KCC is {util_pct:.0f}% used (Rs {kcc_outstanding:,.0f} outstanding) — "
+                    f"very little headroom for additional borrowing"
+                )
+            elif util_pct <= 40 and kcc_headroom > 20_000:
+                strengths.append(
+                    f"KCC has Rs {kcc_headroom:,.0f} headroom (card only {util_pct:.0f}% used)"
+                )
+
+            if kcc_repayment == "current" and util_pct < 85:
+                strengths.append("KCC payments are current — you're in good standing with your card")
+        else:
+            risks.append(
+                "No Kisan Credit Card on file — consider enrolling at your PACS "
+                "for subsidized input credit"
+            )
+
     # Readiness determination
-    if len(risks) == 0 and expected_revenue > typical_input_loan_rs * 2:
+    if kcc_force_not_yet:
+        readiness = "not_yet"
+    elif len(risks) == 0 and expected_revenue > typical_input_loan_rs * 2:
         readiness = "strong"
     elif len(risks) <= 1 and expected_revenue > typical_input_loan_rs * 1.5:
         readiness = "moderate"
@@ -406,6 +499,11 @@ def assess_credit_readiness(
         risks=risks,
         advice_en=advice_en,
         advice_ta=advice_ta,
+        kcc_limit_rs=round(kcc_limit, 0),
+        kcc_outstanding_rs=round(kcc_outstanding, 0),
+        kcc_headroom_rs=round(kcc_headroom, 0),
+        kcc_repayment_status=kcc_repayment,
+        dpi_checked=dpi_profile is not None,
     )
 
 
@@ -464,6 +562,11 @@ def credit_readiness_to_dict(cr: CreditReadiness) -> dict:
         "risks": cr.risks,
         "advice_en": cr.advice_en,
         "advice_ta": cr.advice_ta,
+        "kcc_limit_rs": cr.kcc_limit_rs,
+        "kcc_outstanding_rs": cr.kcc_outstanding_rs,
+        "kcc_headroom_rs": cr.kcc_headroom_rs,
+        "kcc_repayment_status": cr.kcc_repayment_status,
+        "dpi_checked": cr.dpi_checked,
     }
 
 
