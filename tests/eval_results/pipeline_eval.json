@@ -1,0 +1,24 @@
+{
+  "run_id": "aad34c62",
+  "status": "ok",
+  "duration_s": 5.34,
+  "step_status": {
+    "ingest": "ok",
+    "extract": "ok",
+    "reconcile": "ok",
+    "forecast": "ok",
+    "optimize": "ok",
+    "recommend": "ok",
+    "deliver": "ok"
+  },
+  "mandis_processed": 15,
+  "commodities_tracked": 10,
+  "price_conflicts_found": 31,
+  "total_cost_usd": 0.0,
+  "quality_checks_passed": 1,
+  "quality_checks_total": 1,
+  "reconciled_mandis": 15,
+  "forecast_count": 56,
+  "recommendation_count": 3,
+  "sell_recs_count": 100
+}

@@ -1,0 +1,64 @@
+{
+  "cases": [
+    {
+      "farmer_id": "FMR-LKSH",
+      "farmer_name": "Lakshmi",
+      "commodity": "RICE-SAMBA",
+      "text_length": 570,
+      "checks": {
+        "has_where": true,
+        "has_when": true,
+        "has_how_much": true,
+        "has_risk": true,
+        "farmer_id_match": true,
+        "farmer_name_match": true,
+        "commodity_match": true,
+        "text_nonempty": true,
+        "quantity_in_text": true
+      },
+      "passed": true
+    },
+    {
+      "farmer_id": "FMR-KUMR",
+      "farmer_name": "Kumar",
+      "commodity": "TUR-FIN",
+      "text_length": 465,
+      "checks": {
+        "has_where": true,
+        "has_when": true,
+        "has_how_much": true,
+        "has_risk": true,
+        "farmer_id_match": true,
+        "farmer_name_match": true,
+        "commodity_match": true,
+        "text_nonempty": true,
+        "quantity_in_text": true
+      },
+      "passed": true
+    },
+    {
+      "farmer_id": "FMR-MEEN",
+      "farmer_name": "Meena",
+      "commodity": "BAN-ROB",
+      "text_length": 596,
+      "checks": {
+        "has_where": true,
+        "has_when": true,
+        "has_how_much": true,
+        "has_risk": true,
+        "farmer_id_match": true,
+        "farmer_name_match": true,
+        "commodity_match": true,
+        "text_nonempty": true,
+        "quantity_in_text": true,
+        "spoilage_flagged": true
+      },
+      "passed": true
+    }
+  ],
+  "deterministic": true,
+  "summary": {
+    "total": 3,
+    "failed": []
+  }
+}

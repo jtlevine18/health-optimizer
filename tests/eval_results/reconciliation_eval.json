@@ -1,0 +1,121 @@
+{
+  "cases": [
+    {
+      "label": "agreement_within_3pct",
+      "commodity": "RICE-SAMBA",
+      "price_rs": 2800,
+      "source_used": "agmarknet (sources agree)",
+      "confidence": 0.95,
+      "reasoning": "Sources agree within 3% (delta=1.1%).",
+      "expected_source": "agmarknet",
+      "expected_price_range": [
+        2750,
+        2850
+      ],
+      "source_match": true,
+      "price_in_range": true,
+      "passed": true
+    },
+    {
+      "label": "minor_conflict_5pct",
+      "commodity": "TUR-FIN",
+      "price_rs": 13040.0,
+      "source_used": "weighted_average",
+      "confidence": 0.8,
+      "reasoning": "Minor conflict: Agmarknet Rs 12800 vs eNAM Rs 13400 (delta=4.7%). Using 60/40 weighted average.",
+      "expected_source": "weighted_average",
+      "expected_price_range": [
+        12800,
+        13400
+      ],
+      "source_match": true,
+      "price_in_range": true,
+      "passed": true
+    },
+    {
+      "label": "major_conflict_15pct_good_enam",
+      "commodity": "COT-MCU",
+      "price_rs": 7272.0,
+      "source_used": "weighted_average (low confidence)",
+      "confidence": 0.6,
+      "reasoning": "Significant conflict: Agmarknet Rs 6800 vs eNAM Rs 7850 (delta=15.4%). Using cautious weighted average. Needs investigation.",
+      "expected_source": "weighted_average (low confidence)",
+      "expected_price_range": [
+        6800,
+        7900
+      ],
+      "source_match": true,
+      "price_in_range": true,
+      "passed": true
+    },
+    {
+      "label": "enam_stale",
+      "commodity": "GNUT-POD",
+      "price_rs": 5900,
+      "source_used": "agmarknet (eNAM stale)",
+      "confidence": 0.6,
+      "reasoning": "eNAM data flagged as stale. Using Agmarknet Rs 5900.",
+      "expected_source": "agmarknet (eNAM stale)",
+      "expected_price_range": [
+        5850,
+        5950
+      ],
+      "source_match": true,
+      "price_in_range": true,
+      "passed": true
+    },
+    {
+      "label": "enam_anomalous",
+      "commodity": "MZE-YEL",
+      "price_rs": 2100,
+      "source_used": "agmarknet (eNAM anomalous)",
+      "confidence": 0.6,
+      "reasoning": "eNAM price anomalous (Rs 4200). Using Agmarknet.",
+      "expected_source": "agmarknet (eNAM anomalous)",
+      "expected_price_range": [
+        2050,
+        2150
+      ],
+      "source_match": true,
+      "price_in_range": true,
+      "passed": true
+    },
+    {
+      "label": "agmarknet_only",
+      "commodity": "ONI-RED",
+      "price_rs": 1800,
+      "source_used": "agmarknet_only",
+      "confidence": 0.75,
+      "reasoning": "Only Agmarknet has data for this commodity.",
+      "expected_source": "agmarknet_only",
+      "expected_price_range": [
+        1750,
+        1850
+      ],
+      "source_match": true,
+      "price_in_range": true,
+      "passed": true
+    },
+    {
+      "label": "enam_only",
+      "commodity": "BAN-ROB",
+      "price_rs": 1700,
+      "source_used": "enam_only",
+      "confidence": 0.65,
+      "reasoning": "Only eNAM has data for this commodity.",
+      "expected_source": "enam_only",
+      "expected_price_range": [
+        1650,
+        1750
+      ],
+      "source_match": true,
+      "price_in_range": true,
+      "passed": true
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "passed": 7,
+    "failed": []
+  }
+}

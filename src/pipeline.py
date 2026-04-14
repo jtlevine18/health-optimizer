@@ -71,6 +71,11 @@ class PipelineRunResult:
     price_conflicts_found: int
     total_cost_usd: float
     duration_s: float
+    # Post-pipeline quality check results. Populated by run_all_checks()
+    # after the pipeline finishes. Zero/zero means the checks didn't run
+    # (e.g. no DATABASE_URL).
+    quality_checks_passed: int = 0
+    quality_checks_total: int = 0
 
 
 # ── Pipeline class ───────────────────────────────────────────────────────
@@ -183,6 +188,26 @@ class MarketIntelligencePipeline:
 
         # Push to store
         self._update_store(result)
+
+        # Post-pipeline data quality checks — catches silent failures
+        # (zero forecasts, null prices, out-of-range values). Never blocks
+        # the run; a failing check is logged as a warning and counted in
+        # the pipeline result so the dashboard can surface it.
+        try:
+            from src.quality_checks import run_all_checks
+
+            qc_results = run_all_checks()
+            qc_passed = sum(1 for p, _ in qc_results if p)
+            qc_total = len(qc_results)
+            result.quality_checks_passed = qc_passed
+            result.quality_checks_total = qc_total
+            if qc_passed < qc_total:
+                logger.warning(
+                    "Pipeline run %s: %d/%d quality checks failed",
+                    run_id, qc_total - qc_passed, qc_total,
+                )
+        except Exception as exc:
+            logger.warning("quality_checks pass failed: %s", exc)
 
         logger.info(
             "Pipeline run %s complete -- status=%s, conflicts=%d, cost=$%.4f, duration=%.1fs",
