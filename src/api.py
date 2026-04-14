@@ -1137,11 +1137,11 @@ def retrain_mos():
     def _run_retrain():
         try:
             from scripts.retrain_mos import main
-            print("[RETRAIN] Starting MOS retrain from Neon data", flush=True)
+            logger.info("[RETRAIN] Starting MOS retrain from Neon data")
             main()
-            print("[RETRAIN] MOS retrain complete", flush=True)
+            logger.info("[RETRAIN] MOS retrain complete")
         except Exception as e:
-            print(f"[RETRAIN] Failed: {e}", flush=True)
+            logger.error("[RETRAIN] Failed: %s", e, exc_info=True)
 
     thread = threading.Thread(target=_run_retrain, daemon=True)
     thread.start()

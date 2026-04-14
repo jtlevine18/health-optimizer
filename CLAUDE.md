@@ -8,7 +8,7 @@ Part of Jeff Levine's portfolio: Weather AI tells her what to plant, Market Inte
 
 **3-tier deployment (same pattern as Weather AI 2):**
 - **HF Spaces** (pipeline runner): `jtlevine/market-intelligence` — Docker, FastAPI, port 7860. Runs weekly pipeline, writes to Neon. Paused between runs to save compute.
-- **Vercel** (frontend + API): `market-intelligence-tn.vercel.app` — React SPA + serverless functions that read from Neon. Always on. Works even when HF Space is paused.
+- **Vercel** (frontend + API): `https://crop-pricing.jeff-levine.com` — React SPA + serverless functions that read from Neon. Always on. Works even when HF Space is paused.
 - **Neon** (PostgreSQL): Persists pipeline data across Space pauses/restarts. Vercel serverless functions query Neon directly.
 
 **Data flow:**

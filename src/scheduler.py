@@ -108,9 +108,9 @@ class PipelineScheduler:
             import asyncio
             import os
             import time
-            print("[PIPELINE] Starting pipeline run", flush=True)
+            logger.info("[PIPELINE] Starting pipeline run")
             has_claude = bool(os.getenv("ANTHROPIC_API_KEY"))
-            print(f"[PIPELINE] Claude API: {'enabled' if has_claude else 'disabled'}", flush=True)
+            logger.info("[PIPELINE] Claude API: %s", "enabled" if has_claude else "disabled")
             pipeline = MarketIntelligencePipeline(
                 days_back=30,
                 use_claude_extraction=has_claude,
@@ -127,13 +127,17 @@ class PipelineScheduler:
             self._save_state()
 
             self._current_step = None
-            print(f"[PIPELINE] Complete -- status={result.status}, duration={result.duration_s:.1f}s, cost=${result.total_cost_usd:.4f}", flush=True)
+            logger.info(
+                "[PIPELINE] Complete -- status=%s, duration=%.1fs, cost=$%.4f",
+                result.status, result.duration_s, result.total_cost_usd,
+            )
             for s in result.steps:
-                print(f"[PIPELINE]   {s.step}: {s.status} ({s.duration_s:.1f}s) {s.errors or ''}", flush=True)
+                logger.info(
+                    "[PIPELINE]   %s: %s (%.1fs) %s",
+                    s.step, s.status, s.duration_s, s.errors or "",
+                )
         except Exception as exc:
-            print(f"[PIPELINE] FAILED: {exc}", flush=True)
-            import traceback
-            traceback.print_exc()
+            logger.error("[PIPELINE] FAILED: %s", exc, exc_info=True)
             self._current_step = None
             self._state["last_status"] = "failed"
             self._save_state()
@@ -145,13 +149,13 @@ class PipelineScheduler:
         if status == "started":
             self._current_step = step
             self._step_started_at = datetime.now(timezone.utc).isoformat()
-            print(f"[PIPELINE] Step: {step} -- started", flush=True)
+            logger.info("[PIPELINE] Step: %s -- started", step)
         elif status in ("ok", "skipped", "failed"):
             self._completed_steps.append({
                 "step": step, "status": status, "duration_s": round(duration_s, 1),
             })
             self._current_step = None
-            print(f"[PIPELINE] Step: {step} -- {status} ({duration_s:.1f}s)", flush=True)
+            logger.info("[PIPELINE] Step: %s -- %s (%.1fs)", step, status, duration_s)
 
     @property
     def progress(self) -> dict:
