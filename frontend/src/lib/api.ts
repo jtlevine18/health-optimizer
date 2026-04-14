@@ -18,6 +18,14 @@ import {
   pipelineStatsResponse,
 } from './mockData'
 
+const BASE_URL = import.meta.env.VITE_API_URL ?? ''
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`)
+  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`)
+  return res.json() as Promise<T>
+}
+
 function mock<T>(value: T, delayMs = 260): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), delayMs))
 }
@@ -316,7 +324,7 @@ const STALE_5MIN = 5 * 60 * 1000
 export function useMandis() {
   return useQuery<MandisResponse>({
     queryKey: ['mandis'],
-    queryFn: () => mock(mandisResponse),
+    queryFn: () => fetchJson<MandisResponse>('/api/mandis'),
     staleTime: STALE_5MIN,
   })
 }
@@ -324,7 +332,7 @@ export function useMandis() {
 export function useMarketPrices() {
   return useQuery<MarketPricesResponse>({
     queryKey: ['market-prices'],
-    queryFn: () => mock(marketPricesResponse, 320),
+    queryFn: () => fetchJson<MarketPricesResponse>('/api/market-prices'),
     staleTime: STALE_5MIN,
   })
 }
@@ -332,7 +340,7 @@ export function useMarketPrices() {
 export function usePriceForecasts() {
   return useQuery<PriceForecastsResponse>({
     queryKey: ['price-forecast'],
-    queryFn: () => mock(priceForecastsResponse, 300),
+    queryFn: () => fetchJson<PriceForecastsResponse>('/api/price-forecast'),
     staleTime: STALE_5MIN,
   })
 }
@@ -340,7 +348,7 @@ export function usePriceForecasts() {
 export function useSellRecommendations() {
   return useQuery<SellRecommendationsResponse>({
     queryKey: ['sell-recommendations'],
-    queryFn: () => mock(sellRecommendationsResponse, 340),
+    queryFn: () => fetchJson<SellRecommendationsResponse>('/api/sell-recommendations'),
     staleTime: STALE_5MIN,
   })
 }
@@ -348,7 +356,7 @@ export function useSellRecommendations() {
 export function usePriceConflicts() {
   return useQuery<PriceConflictsResponse>({
     queryKey: ['price-conflicts'],
-    queryFn: () => mock(priceConflictsResponse, 240),
+    queryFn: () => fetchJson<PriceConflictsResponse>('/api/price-conflicts'),
     staleTime: STALE_5MIN,
   })
 }
@@ -380,7 +388,7 @@ export function useReconciledData() {
 export function useModelInfo() {
   return useQuery<ModelInfoResponse>({
     queryKey: ['model-info'],
-    queryFn: () => mock(modelInfoResponse, 220),
+    queryFn: () => fetchJson<ModelInfoResponse>('/api/model-info'),
     staleTime: STALE_5MIN,
   })
 }
@@ -388,7 +396,7 @@ export function useModelInfo() {
 export function useDeliveryLogs() {
   return useQuery<DeliveryLogsResponse>({
     queryKey: ['delivery-logs'],
-    queryFn: () => mock(deliveryLogsResponse, 260),
+    queryFn: () => fetchJson<DeliveryLogsResponse>('/api/delivery-logs'),
     staleTime: STALE_5MIN,
   })
 }
@@ -396,7 +404,7 @@ export function useDeliveryLogs() {
 export function usePipelineRuns() {
   return useQuery<PipelineRunsResponse>({
     queryKey: ['pipeline-runs'],
-    queryFn: () => mock(pipelineRunsResponse, 300),
+    queryFn: () => fetchJson<PipelineRunsResponse>('/api/pipeline-runs'),
     staleTime: STALE_5MIN,
   })
 }
@@ -404,7 +412,7 @@ export function usePipelineRuns() {
 export function usePipelineStats() {
   return useQuery<PipelineStats>({
     queryKey: ['pipeline-stats'],
-    queryFn: () => mock(pipelineStatsResponse, 220),
+    queryFn: () => fetchJson<PipelineStats>('/api/pipeline-stats'),
     staleTime: STALE_5MIN,
   })
 }
