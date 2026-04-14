@@ -28,12 +28,15 @@ import hashlib
 import random
 from typing import Dict, List, Optional
 
+from config import MANDI_MAP, SAMPLE_FARMERS
+
 from src.dpi.models import (
     AadhaarProfile,
     FarmerProfile,
     KCCRecord,
     LandRecord,
 )
+from src.geo import haversine_km
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +227,6 @@ def _make_kcc(commodity_id: str, area_ha: float, rng: random.Random) -> KCCRecor
         crops_financed=[commodity_id],
         repayment_status=repayment_status,
         last_payment_date=f"2025-{rng.randint(1, 12):02d}-{rng.randint(1, 28):02d}",
-        interest_rate_pct=7.0 if repayment_status == "current" else 9.5,
     )
 
 
@@ -247,12 +249,6 @@ class SimulatedDPIRegistry:
         self._generate_all()
 
     def _generate_all(self) -> None:
-        # Import here to avoid a circular dependency (config imports
-        # from src.dpi in no path, but dpi -> config is fine post-init).
-        from config import SAMPLE_FARMERS, MANDI_MAP
-
-        from src.geo import haversine_km
-
         for farmer in SAMPLE_FARMERS:
             rng = _seed_rng(farmer.farmer_id)
 

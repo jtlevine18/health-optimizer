@@ -9,10 +9,18 @@ Recommends the optimal combination across space (which mandi) and time
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING
+from typing import Literal, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.dpi.models import FarmerProfile
+    from src.dpi.models import FarmerProfile, KCCRepaymentStatus
+
+# KCC utilization thresholds used to classify headroom as risk vs strength.
+# 85% is the standard concern threshold lenders use when assessing how much
+# additional credit a farmer can absorb; below 40% with meaningful headroom
+# is treated as a positive signal.
+KCC_UTILIZATION_HIGH_PCT = 85.0
+KCC_UTILIZATION_SAFE_PCT = 40.0
+KCC_MIN_HEADROOM_FOR_STRENGTH_RS = 20_000.0
 
 from config import (
     COMMODITY_MAP,
@@ -303,7 +311,7 @@ def _generate_recommendation_text(
 @dataclass
 class CreditReadiness:
     """Farmer-facing credit readiness assessment derived from sell optimization."""
-    readiness: str            # "strong", "moderate", "not_yet"
+    readiness: Literal["strong", "moderate", "not_yet"]
     expected_revenue_rs: float
     min_revenue_rs: float
     max_advisable_input_loan_rs: float
@@ -313,14 +321,17 @@ class CreditReadiness:
     risks: list[str]
     advice_en: str
     advice_ta: str            # Tamil placeholder
-    # DPI-aware fields — populated when a dpi_profile is passed in. Left
-    # zeroed when the farmer has no KCC on file, so the dashboard can
-    # tell the difference between "no DPI" and "checked DPI, zero KCC".
+    # DPI-aware fields — populated when a dpi_profile is passed in. Zeros
+    # + dpi_checked=False means the assessment never saw DPI data, so the
+    # dashboard can distinguish "no DPI" from "checked DPI, zero KCC".
     kcc_limit_rs: float = 0.0
     kcc_outstanding_rs: float = 0.0
-    kcc_headroom_rs: float = 0.0
-    kcc_repayment_status: str = ""  # current / overdue / defaulted / ""
+    kcc_repayment_status: str = ""  # "" when no profile; otherwise KCCRepaymentStatus
     dpi_checked: bool = False
+
+    @property
+    def kcc_headroom_rs(self) -> float:
+        return max(0.0, self.kcc_limit_rs - self.kcc_outstanding_rs)
 
 
 def assess_credit_readiness(
@@ -456,17 +467,17 @@ def assess_credit_readiness(
                 risks.append(
                     f"KCC is overdue on your last payment — clear it before seeking new credit"
                 )
-            elif util_pct >= 85:
+            elif util_pct >= KCC_UTILIZATION_HIGH_PCT:
                 risks.append(
                     f"KCC is {util_pct:.0f}% used (Rs {kcc_outstanding:,.0f} outstanding) — "
                     f"very little headroom for additional borrowing"
                 )
-            elif util_pct <= 40 and kcc_headroom > 20_000:
+            elif util_pct <= KCC_UTILIZATION_SAFE_PCT and kcc_headroom > KCC_MIN_HEADROOM_FOR_STRENGTH_RS:
                 strengths.append(
                     f"KCC has Rs {kcc_headroom:,.0f} headroom (card only {util_pct:.0f}% used)"
                 )
 
-            if kcc_repayment == "current" and util_pct < 85:
+            if kcc_repayment == "current" and util_pct < KCC_UTILIZATION_HIGH_PCT:
                 strengths.append("KCC payments are current — you're in good standing with your card")
         else:
             risks.append(
@@ -501,7 +512,6 @@ def assess_credit_readiness(
         advice_ta=advice_ta,
         kcc_limit_rs=round(kcc_limit, 0),
         kcc_outstanding_rs=round(kcc_outstanding, 0),
-        kcc_headroom_rs=round(kcc_headroom, 0),
         kcc_repayment_status=kcc_repayment,
         dpi_checked=dpi_profile is not None,
     )

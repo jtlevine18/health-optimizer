@@ -17,7 +17,9 @@ assessment consumes directly.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Literal, Optional
+
+KCCRepaymentStatus = Literal["current", "overdue", "defaulted"]
 
 
 @dataclass
@@ -55,17 +57,16 @@ class LandRecord:
 class KCCRecord:
     """Kisan Credit Card state: limit, outstanding, repayment status.
 
-    `credit_limit` and `outstanding` are in rupees. `repayment_status` is
-    one of {"current", "overdue", "defaulted"} -- these drive the credit
-    readiness classification.
+    `credit_limit` and `outstanding` are in rupees. `repayment_status`
+    drives the credit readiness classification — a `defaulted` status
+    forces `not_yet` regardless of projected revenue.
     """
     kcc_number: str
     credit_limit: float
     outstanding: float
     crops_financed: List[str] = field(default_factory=list)
-    repayment_status: str = "current"
+    repayment_status: KCCRepaymentStatus = "current"
     last_payment_date: str = ""
-    interest_rate_pct: float = 7.0  # subsidized rate for current accounts
 
     @property
     def headroom(self) -> float:
