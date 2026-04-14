@@ -381,22 +381,112 @@ class FarmerPersona:
     quantity_quintals: float
     has_storage: bool
     notes: str = ""
+    featured: bool = False  # Precomputed live in the weekly run for the demo UI
 
 
-SAMPLE_FARMERS = [
+# Curated, hand-written personas used in screenshots, tour narrative, and the
+# featured demo cards. Always marked featured=True — they get precomputed
+# RECOMMEND calls every weekly pipeline run.
+_CURATED_FARMERS: list[FarmerPersona] = [
     FarmerPersona(
         "FMR-LKSH", "Lakshmi", "Thanjavur",
         10.78, 79.14, "RICE-SAMBA", 25.0, True,
         "Smallholder rice farmer in the Cauvery delta. Has dry storage shed.",
+        featured=True,
     ),
     FarmerPersona(
         "FMR-KUMR", "Kumar", "Erode",
         11.34, 77.72, "TUR-FIN", 15.0, True,
         "Turmeric grower near Erode market. Can hold inventory 2-3 months.",
+        featured=True,
     ),
     FarmerPersona(
         "FMR-MEEN", "Meena", "Dindigul",
         10.36, 77.97, "BAN-ROB", 30.0, False,
         "Banana farmer. No cold storage -- must sell within 7 days of harvest.",
+        featured=True,
     ),
 ]
+
+
+# Scale target: 100 farmers across 15 Tamil Nadu mandis. Represents a
+# year-1 cooperative / block-level pilot. Only FEATURED_FARMERS get precomputed
+# RECOMMEND calls in the weekly pipeline run — the other ~97 exist in the
+# registry so the product can compute on demand or at full scale later.
+TARGET_FARMER_COUNT = 100
+
+_TAMIL_FIRST_NAMES = [
+    "Arun", "Bala", "Chandra", "Divya", "Eswari", "Ganesh", "Hari", "Indira",
+    "Jayanthi", "Karthik", "Lakshman", "Mani", "Nila", "Ponni", "Raja", "Saroja",
+    "Thangam", "Uma", "Vel", "Yamuna", "Aruna", "Bharathi", "Chitra", "Dinesh",
+    "Esakki", "Ganga", "Hema", "Ilango", "Jothi", "Kavitha", "Latha", "Murugan",
+    "Nandini", "Priya", "Raji", "Santhi", "Tamil", "Usha", "Velan", "Valli",
+    "Anandhi", "Bhuvana", "Cheran", "Deva", "Eswar", "Gopal", "Hariharan",
+    "Janani", "Kumari", "Lalitha", "Madhan", "Nithya", "Parvathi", "Ranjan",
+    "Shakti", "Thamarai", "Uthra", "Vignesh", "Yogesh", "Amutha", "Bharathan",
+    "Devi", "Elango", "Geetha", "Hemalatha", "Inbaraj", "Janaki", "Kanagavel",
+    "Malathi", "Nagarajan", "Ponnammal", "Ragu", "Suganya", "Thirumalai",
+    "Vimala", "Yogendra", "Anbalagan", "Bhavani", "Chellamuthu", "Durga",
+    "Edwin", "Ganapathy", "Iswarya", "Jagadeesh", "Kalaivani", "Lavanya",
+    "Malar", "Natesan", "Padma", "Rajaraman", "Saravana", "Thulasi", "Uthaman",
+    "Venkatesh", "Amsaveni", "Balamurugan", "Devaki", "Ezhilarasi", "Ganapathi",
+    "Hariharan", "Ishwarya", "Jeevitha", "Kamakshi",
+]
+
+
+def _generate_pilot_farmers(curated: list[FarmerPersona], target: int) -> list[FarmerPersona]:
+    """Procedurally generate additional farmer personas to reach `target` total.
+
+    Distributes farmers across all 15 mandis in MANDIS using each mandi's
+    actual commodity list. Fully deterministic via fixed seed=42 — the demo
+    data is reproducible across restarts and environments. All generated
+    farmers have featured=False.
+    """
+    import random
+
+    needed = target - len(curated)
+    if needed <= 0:
+        return []
+
+    rng = random.Random(42)
+    generated: list[FarmerPersona] = []
+    name_pool = list(_TAMIL_FIRST_NAMES)
+    rng.shuffle(name_pool)
+
+    # Round-robin across mandis so each has meaningful representation.
+    mandi_cycle: list[Mandi] = []
+    for i in range(needed):
+        mandi_cycle.append(MANDIS[i % len(MANDIS)])
+
+    for i, mandi in enumerate(mandi_cycle):
+        farmer_id = f"FMR-{i + 1:04d}"
+        name = name_pool[i % len(name_pool)]
+        # Slight GPS jitter so farmers don't sit on the mandi pin
+        lat = mandi.latitude + rng.uniform(-0.08, 0.08)
+        lon = mandi.longitude + rng.uniform(-0.08, 0.08)
+        commodity = rng.choice(mandi.commodities_traded)
+        quantity = round(rng.uniform(8.0, 35.0), 1)
+        has_storage = rng.random() < 0.6
+        generated.append(FarmerPersona(
+            farmer_id=farmer_id,
+            name=name,
+            location_name=mandi.district,
+            latitude=round(lat, 4),
+            longitude=round(lon, 4),
+            primary_commodity=commodity,
+            quantity_quintals=quantity,
+            has_storage=has_storage,
+            notes="",
+            featured=False,
+        ))
+
+    return generated
+
+
+SAMPLE_FARMERS: list[FarmerPersona] = (
+    _CURATED_FARMERS + _generate_pilot_farmers(_CURATED_FARMERS, TARGET_FARMER_COUNT)
+)
+
+# Featured subset: only these farmers get precomputed RECOMMEND calls in the
+# weekly pipeline. The rest are available for on-demand computation.
+FEATURED_FARMERS: list[FarmerPersona] = [f for f in SAMPLE_FARMERS if f.featured]

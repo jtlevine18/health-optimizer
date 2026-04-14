@@ -22,6 +22,7 @@ from config import (
     MANDI_MAP,
     PIPELINE_STEPS,
     SAMPLE_FARMERS,
+    FEATURED_FARMERS,
     SEASONAL_INDICES,
     BASE_PRICES_RS,
 )
@@ -632,7 +633,11 @@ class MarketIntelligencePipeline:
         try:
             agent = RecommendationAgent()
 
-            for farmer in SAMPLE_FARMERS:
+            # Only precompute for featured farmers in the weekly run.
+            # The full 100-farmer registry is available for on-demand computation —
+            # see FEATURED_FARMERS in config.py. This keeps the weekly Claude spend
+            # pinned to the demo surface while the capacity scales to pilot size.
+            for farmer in FEATURED_FARMERS:
                 try:
                     sell_rec = self._sell_recommendations.get(farmer.farmer_id, {})
                     rec = agent.recommend(
@@ -647,7 +652,9 @@ class MarketIntelligencePipeline:
                 except Exception as exc:
                     errors.append(f"Recommendation for {farmer.name} failed: {exc}")
 
-            est_cost = self._recommendation_tokens * 0.005 / 1000
+            # Blended Sonnet (reasoning) + Haiku (translation) cost estimate.
+            # Actual cost depends on the split; this is a conservative upper bound.
+            est_cost = self._recommendation_tokens * 0.004 / 1000
 
             return StepResult(
                 step="recommend", status="ok" if not errors else "partial",
@@ -656,6 +663,8 @@ class MarketIntelligencePipeline:
                 errors=errors,
                 details={
                     "recommendations_generated": len(self._farmer_recommendations),
+                    "featured_farmers": len(FEATURED_FARMERS),
+                    "total_pilot_farmers": len(SAMPLE_FARMERS),
                     "total_tokens": self._recommendation_tokens,
                     "cost_usd": est_cost,
                 },

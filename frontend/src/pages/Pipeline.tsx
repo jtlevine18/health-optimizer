@@ -233,6 +233,52 @@ export default function Pipeline() {
               </div>
             </div>
           </div>
+
+          {/* Pilot scaling cost tiers */}
+          <div className="mt-8">
+            <div className="section-header">What it costs to run at pilot scale</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="card card-body" style={{ borderLeft: '3px solid #2a9d8f' }}>
+                <p className="text-xs font-sans font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#2a9d8f' }}>
+                  Current (live)
+                </p>
+                <p className="text-lg font-serif font-bold text-[#1a1a1a] m-0">~$0.16 / week</p>
+                <p className="text-xs text-warm-body m-0 mt-1">
+                  15 mandis scraped and reconciled. 3 featured farmers get precomputed sell advice.
+                </p>
+                <p className="text-xs text-warm-muted m-0 mt-2">
+                  Extract + Reconcile run once per mandi, shared across all farmers.
+                </p>
+              </div>
+              <div className="card card-body" style={{ borderLeft: '3px solid #1565C0' }}>
+                <p className="text-xs font-sans font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#1565C0' }}>
+                  Pilot (100 farmers)
+                </p>
+                <p className="text-lg font-serif font-bold text-[#1a1a1a] m-0">~$1.50 / week</p>
+                <p className="text-xs text-warm-body m-0 mt-1">
+                  One cooperative. Every farmer gets a personalized recommendation every weekly run.
+                </p>
+                <p className="text-xs text-warm-muted m-0 mt-2">
+                  Haiku handles Tamil translation; Sonnet handles reasoning.
+                </p>
+              </div>
+              <div className="card card-body" style={{ borderLeft: '3px solid #d4a019' }}>
+                <p className="text-xs font-sans font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#d4a019' }}>
+                  State-wide (10K farmers)
+                </p>
+                <p className="text-lg font-serif font-bold text-[#1a1a1a] m-0">~$30 / week</p>
+                <p className="text-xs text-warm-body m-0 mt-1">
+                  Tamil Nadu block extension network. 100x the farmers; ~20x the cost because scraping stays fixed.
+                </p>
+                <p className="text-xs text-warm-muted m-0 mt-2">
+                  Data scraping and forecasting cost don't move with farmer count.
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-warm-muted mt-3 italic">
+              The registry already holds 100 farmers across all 15 mandis. Weekly runs precompute only featured farmers — the rest compute on demand.
+            </p>
+          </div>
         </div>
       )}
 

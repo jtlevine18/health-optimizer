@@ -323,12 +323,26 @@ class RecommendationAgent:
     """Claude-powered recommendation agent with RAG support.
 
     Falls back to RuleBasedRecommender when Claude is unavailable.
+
+    Two-model setup (current default):
+      - `model` (Sonnet) — multi-round tool-use loop to reason over market data.
+        Tool use quality matters more than cost here.
+      - `translation_model` (Haiku) — plain English→Tamil translation of the
+        already-generated recommendation. Pure translation task, ~3x cheaper
+        than Sonnet with no meaningful quality difference for this kind of
+        short, structured copy. Safe to switch; reasoning stays on Sonnet until
+        a live A/B test confirms Haiku holds up on the tool-use chain.
     """
 
     MAX_ROUNDS = 4
 
-    def __init__(self, model: str = "claude-sonnet-4-20250514"):
+    def __init__(
+        self,
+        model: str = "claude-sonnet-4-20250514",
+        translation_model: str = "claude-haiku-4-5-20251001",
+    ):
         self.model = model
+        self.translation_model = translation_model
         self._client = None
 
     def _get_client(self):
@@ -408,13 +422,26 @@ class RecommendationAgent:
         # ── Multi-round tool loop ──────────────────────────────────────
         recommendation_text = ""
 
+        # Prompt-caching layout: the system prompt and the tool definitions are
+        # identical across every farmer in a run. Marking them with
+        # cache_control lets Anthropic reuse that prefix for the 2nd..Nth
+        # farmer in the same run at ~10% of the base input cost. The multi-round
+        # tool loop re-sends system+tools each turn, so caching compounds within
+        # a single farmer's tool chain as well.
+        cached_system = [
+            {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}
+        ]
+        cached_tools = list(TOOLS)
+        if cached_tools:
+            cached_tools[-1] = {**cached_tools[-1], "cache_control": {"type": "ephemeral"}}
+
         for round_num in range(self.MAX_ROUNDS):
             try:
                 response = client.messages.create(
                     model=self.model,
                     max_tokens=2048,
-                    system=SYSTEM_PROMPT,
-                    tools=TOOLS,
+                    system=cached_system,
+                    tools=cached_tools,
                     messages=messages,
                 )
             except Exception as e:
@@ -477,12 +504,12 @@ class RecommendationAgent:
 
             messages.append({"role": "user", "content": tool_results})
 
-        # ── Tamil translation ──────────────────────────────────────────
+        # ── Tamil translation (Haiku 4.5) ──────────────────────────────
         recommendation_ta = ""
         if recommendation_text:
             try:
                 translation_response = client.messages.create(
-                    model=self.model,
+                    model=self.translation_model,
                     max_tokens=2048,
                     messages=[{
                         "role": "user",
