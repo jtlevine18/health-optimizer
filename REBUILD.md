@@ -180,7 +180,7 @@ Each chunk should be a plain-text paragraph that an AI agent can retrieve and us
 
 | File | What to change |
 |------|---------------|
-| `config.py` | Update `COMMODITIES`, `MANDIS`, `SEASONAL_INDICES`, `BASE_PRICES_RS`, `SAMPLE_FARMERS`, `TRANSPORT_COST`, `MANDI_FEE_PCT`. Or better: make it load from your JSON files. |
+| `config.py` | Already loads `MANDIS`, `COMMODITIES`, `SEASONAL_INDICES`, `BASE_PRICES_RS`, `POST_HARVEST_LOSS`, and `SAMPLE_FARMERS` from the JSON files above. Only edit the inline constants — `TRANSPORT_COST_RS_PER_QUINTAL_PER_KM`, `MIN_TRANSPORT_COST_RS`, `MANDI_FEE_PCT`, and the API endpoint URLs. |
 | `src/ingestion/agmarknet.py` | Replace with your primary price source. Keep the same `PriceRecord` return type. |
 | `src/ingestion/enam_scraper.py` | Replace with your secondary price source, or delete if you only have one. |
 | `src/extraction/agent.py` | Update `COMMODITY_ALIASES` dict and Claude system prompt to reference your region. |
@@ -190,6 +190,7 @@ Each chunk should be a plain-text paragraph that an AI agent can retrieve and us
 | `frontend/src/regionConfig.ts` | See template above. |
 | `frontend/src/lib/tour.ts` | Rewrite the guided tour narrative for your region's farmers. |
 | `frontend/src/components/Sidebar.tsx` | Update to use `REGION.sidebarTitle` from regionConfig. |
+| `frontend/api/*.ts` | Update any static market/commodity name lookups — these serverless functions carry small region-specific maps (e.g. mandi id → display name) that need to match your new markets.json and commodities.json. |
 
 ### No changes needed (globally portable)
 

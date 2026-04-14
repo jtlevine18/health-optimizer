@@ -39,7 +39,7 @@ HF Space root page (`/`) shows live pipeline progress with step-by-step status, 
 
 ### Backend (Python, FastAPI)
 ```
-config.py                          — 15 mandis, 10 commodities, seasonal indices, loss coefficients, 3 farmer personas
+config.py                          — Loads markets/commodities/farmers from the JSON files below; also holds transport cost, mandi fee, and API endpoint constants
 markets.json                       — Market definitions (portable, load for new regions)
 commodities.json                   — Commodity definitions with seasonal indices and aliases
 farmers.json                       — Sample farmer personas
@@ -65,7 +65,7 @@ scripts/retrain_mos.py             — Monthly MOS retrain from accumulated Neon
 
 ### Vercel Serverless API (frontend/api/)
 ```
-frontend/api/health.ts             — Health check (reads pipeline_runs count from Neon)
+frontend/api/health.ts             — Health check (reads pipeline_runs count from Neon). Served at `/health` on the Vercel deployment (rewritten to `/api/health` by `frontend/vercel.json`).
 frontend/api/mandis.ts             — Static mandi list (no DB needed)
 frontend/api/market-prices.ts      — Reconciled prices from Neon (uses full_data JSONB when available)
 frontend/api/price-forecast.ts     — 7/14/30d forecasts from Neon
@@ -84,7 +84,7 @@ frontend/src/pages/SellOptimizer.tsx — Farmer cards + horizontal cost breakdow
 frontend/src/pages/Pipeline.tsx     — How It Works: 4-category stack (Data / Models / Delivery / Infrastructure) + 3 tabs (Run history / Cost & scale / Build your own)
 frontend/src/pages/Inputs.tsx       — Data page: price grid (market x commodity) + side-by-side reconciliation with investigation steps
 frontend/src/lib/api.ts             — Types + React Query hooks
-frontend/src/lib/tour.ts            — Joyride tour (12 steps, story-driven, forest green accent)
+frontend/src/lib/tour.ts            — Joyride tour (9 steps, story-driven, forest green accent)
 frontend/src/components/TourTooltip.tsx — Custom tooltip with step counter
 frontend/src/components/Sidebar.tsx — Nav with forest green (#446b26) accent; brand "Crop pricing agent"
 ```

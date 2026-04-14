@@ -506,7 +506,11 @@ Update region name, country, currency, languages, map center, market labels, sid
 
 Rewrite the guided tour with a farmer in my region growing my crops.
 
---- 9. VERIFICATION ---
+--- 9. FRONTEND SERVERLESS API (frontend/api/*.ts) ---
+
+Update any static market/commodity name lookups in the Vercel serverless functions. These files carry small region-specific maps (e.g. mandi id → display name) that must match my new markets.json and commodities.json.
+
+--- 10. VERIFICATION ---
 
 Run: python3 -m uvicorn src.api:app --port 7860
 If it fails, debug and fix. Common issues: missing DATABASE_URL, missing API keys, commodity name mismatches.

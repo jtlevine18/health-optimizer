@@ -9,9 +9,11 @@ comes from.
 To add a new data source:
   1. Create a new file in src/ingestion/ (e.g., nafis.py for Kenya)
   2. Implement the PriceSource protocol
-  3. Register it in config.py: PRICE_SOURCES = [YourSource()]
-  4. The pipeline calls fetch() on each source and feeds records into
-     the extraction → reconciliation → forecast chain unchanged.
+  3. Wire it into `src/pipeline.py` — the orchestrator imports price
+     sources directly (see the `_ingest_agmarknet` / `_ingest_enam`
+     helpers in MarketIntelligencePipeline.run). Add a parallel
+     `_ingest_<yoursource>` helper and include it in the asyncio.gather
+     call inside the ingest step.
 """
 
 from __future__ import annotations
