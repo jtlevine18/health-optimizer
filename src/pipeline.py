@@ -10,6 +10,7 @@ Follows a common StepResult/PipelineRunResult pattern.
 import asyncio
 import logging
 import math
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -270,6 +271,7 @@ class MarketIntelligencePipeline:
             total_enam = sum(len(v) for v in self._enam_prices.values())
             total_climate = sum(len(v) for v in self._climate.values())
 
+            demo_mode = os.environ.get("MARKET_INTEL_DEMO_MODE", "").lower() in ("1", "true", "yes")
             status = "ok" if not errors else "partial"
             return StepResult(
                 step="ingest", status=status, duration_s=time.time() - t0,
@@ -280,6 +282,7 @@ class MarketIntelligencePipeline:
                     "agmarknet_records": total_agm,
                     "enam_records": total_enam,
                     "climate_readings": total_climate,
+                    "data_source_mode": "demo" if demo_mode else "live",
                 },
             )
         except Exception as e:
@@ -923,6 +926,7 @@ class MarketIntelligencePipeline:
                         "step": s.step,
                         "status": s.status,
                         "duration_s": round(s.duration_s, 1),
+                        "details": s.details,
                     }
                     for s in result.steps
                 ],

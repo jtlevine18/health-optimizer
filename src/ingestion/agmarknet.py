@@ -82,11 +82,13 @@ async def fetch_mandi_prices(
     _DEFAULT_KEY = "579b464db66ec23bdd000001cdd3946e44ce4aad7209ff7b23ac571b"
     api_key = api_key or os.environ.get("DATA_GOV_IN_API_KEY", _DEFAULT_KEY)
 
-    if api_key and os.environ.get("MARKET_INTEL_USE_REAL_API", "").lower() in ("1", "true", "yes"):
-        return await _fetch_real_prices(mandis, commodities, days_back, api_key)
+    demo_mode = os.environ.get("MARKET_INTEL_DEMO_MODE", "").lower() in ("1", "true", "yes")
+    if demo_mode:
+        log.info("Agmarknet: DEMO mode (MARKET_INTEL_DEMO_MODE set) -- generating seed=42 prices")
+        return _generate_demo_prices(mandis, commodities, days_back, seed=42)
 
-    log.info("Real API disabled (set MARKET_INTEL_USE_REAL_API=1 to enable) -- generating demo prices")
-    return _generate_demo_prices(mandis, commodities, days_back, seed=42)
+    log.info("Agmarknet: LIVE mode -- fetching real prices from data.gov.in")
+    return await _fetch_real_prices(mandis, commodities, days_back, api_key)
 
 
 async def _fetch_real_prices(

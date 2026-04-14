@@ -12,6 +12,7 @@ For demo mode it generates realistic conflicting prices.
 from __future__ import annotations
 
 import logging
+import os
 import random
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -65,13 +66,17 @@ async def fetch_enam_prices(
     if commodities is None:
         commodities = COMMODITIES
 
-    # Only eNAM-integrated mandis have data
-    enam_mandis = [m for m in mandis if m.enam_integrated]
+    demo_mode = os.environ.get("MARKET_INTEL_DEMO_MODE", "").lower() in ("1", "true", "yes")
+    if not demo_mode:
+        log.info("eNAM: LIVE mode -- no real scraper available, returning empty "
+                 "(reconciliation will use Agmarknet-only path)")
+        return {}
 
+    enam_mandis = [m for m in mandis if m.enam_integrated]
     if not enam_mandis:
         return {}
 
-    log.info("eNAM scraper: generating demo prices for %d integrated mandis", len(enam_mandis))
+    log.info("eNAM: DEMO mode -- generating simulated prices for %d integrated mandis", len(enam_mandis))
     return _generate_enam_prices(enam_mandis, commodities, days_back, seed=42)
 
 

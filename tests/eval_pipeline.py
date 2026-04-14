@@ -35,7 +35,7 @@ from src.pipeline import MarketIntelligencePipeline, PipelineRunResult
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "eval_results")
 
 # Force demo mode — no real Agmarknet / eNAM / NASA POWER calls
-os.environ.setdefault("MARKET_INTEL_USE_REAL_API", "0")
+os.environ["MARKET_INTEL_DEMO_MODE"] = "1"
 # Make sure no API key leaks through — we want the rule-based path
 os.environ.pop("ANTHROPIC_API_KEY", None)
 
