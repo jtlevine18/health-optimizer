@@ -415,3 +415,16 @@
   font-family: 'DM Sans', system-ui, sans-serif !important;
   border-radius: 12px !important;
 }
+
+/* Leaflet attribution: bump contrast + size to clear WCAG on the default
+   grey-on-light treatment. Applies whether or not attributionControl is on. */
+.leaflet-container .leaflet-control-attribution {
+  font-size: 12px !important;
+  color: #4a4a4a !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  padding: 2px 6px !important;
+}
+
+.leaflet-container .leaflet-control-attribution a {
+  color: #0d7377 !important;
+}

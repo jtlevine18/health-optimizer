@@ -121,9 +121,11 @@ export default function SellOptimizer() {
               : 0
 
             return (
-              <div
+              <button
                 key={idx}
-                className={`card-accent p-5 cursor-pointer ${isActive ? 'accent-amber' : 'accent-green'}`}
+                type="button"
+                aria-pressed={isActive}
+                className={`card-accent p-5 cursor-pointer text-left w-full bg-white border-0 font-sans ${isActive ? 'accent-amber' : 'accent-green'}`}
                 style={isActive ? { borderLeftWidth: 4 } : undefined}
                 onClick={() => setSelectedFarmer(idx)}
               >
@@ -165,14 +167,25 @@ export default function SellOptimizer() {
                   </div>
                 )}
 
-                {/* Collapsible recommendation text */}
-                <button
-                  className="mt-3 flex items-center gap-1 text-xs font-sans font-medium text-warm-muted hover:text-[#1a1a1a] transition-colors bg-transparent border-none cursor-pointer p-0"
+                {/* Collapsible recommendation text (span + role=button so it can live
+                    inside the farmer card's parent <button> without nesting buttons). */}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
+                  className="mt-3 inline-flex items-center gap-1 text-xs font-sans font-medium text-warm-muted hover:text-[#1a1a1a] transition-colors cursor-pointer"
                   onClick={(e) => { e.stopPropagation(); setExpandedReasoning(isExpanded ? null : idx) }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setExpandedReasoning(isExpanded ? null : idx)
+                    }
+                  }}
                 >
                   {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   AI recommendation
-                </button>
+                </span>
                 {isExpanded && (
                   <div className="mt-2 space-y-2 animate-tab-enter">
                     <p className="text-xs text-warm-body leading-relaxed m-0">
@@ -185,7 +198,7 @@ export default function SellOptimizer() {
                     )}
                   </div>
                 )}
-              </div>
+              </button>
             )
           })}
         </div>

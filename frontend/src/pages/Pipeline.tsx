@@ -133,6 +133,7 @@ export default function Pipeline() {
   const [runsPerWeek, setRunsPerWeek] = useState(1)
   const [claudeModel, setClaudeModel] = useState<'sonnet' | 'haiku'>('sonnet')
   const [triggering, setTriggering] = useState(false)
+  const [triggerError, setTriggerError] = useState<string | null>(null)
 
   if (stats.isLoading) return <LoadingSpinner />
   if (stats.isError) return <ErrorState onRetry={() => stats.refetch()} />
@@ -145,11 +146,17 @@ export default function Pipeline() {
 
   async function handleTrigger() {
     setTriggering(true)
+    setTriggerError(null)
     try {
       const baseUrl = import.meta.env.VITE_API_URL ?? ''
-      await fetch(`${baseUrl}/api/pipeline/trigger`, { method: 'POST' })
+      const res = await fetch(`${baseUrl}/api/pipeline/trigger`, { method: 'POST' })
+      if (!res.ok) {
+        throw new Error(`Pipeline trigger failed: ${res.status} ${res.statusText}`)
+      }
       runs.refetch()
       stats.refetch()
+    } catch (err) {
+      setTriggerError(err instanceof Error ? err.message : 'Failed to trigger pipeline. Please try again.')
     } finally {
       setTriggering(false)
     }
@@ -255,6 +262,19 @@ export default function Pipeline() {
                 </button>
               </div>
             </div>
+            {triggerError && (
+              <div
+                role="alert"
+                className="mt-3 text-xs font-sans px-3 py-2 rounded-md"
+                style={{
+                  color: '#b32434',
+                  background: 'rgba(230, 57, 70, 0.08)',
+                  border: '1px solid rgba(230, 57, 70, 0.25)',
+                }}
+              >
+                {triggerError}
+              </div>
+            )}
           </div>
 
           {/* Run history */}

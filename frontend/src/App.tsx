@@ -8,8 +8,35 @@ import Forecast from './pages/Forecast'
 import SellOptimizer from './pages/SellOptimizer'
 import Pipeline from './pages/Pipeline'
 import Inputs from './pages/Inputs'
+import NotFound from './pages/NotFound'
 import { tourSteps, stepRoutes, tourStyles } from './lib/tour'
 import TourTooltip from './components/TourTooltip'
+
+/**
+ * Wait for the target element of a tour step to exist in the DOM.
+ * Polls on requestAnimationFrame, capped at `timeoutMs` (~3s default).
+ * Resolves once the element is found or the timeout is reached.
+ */
+function waitForTourTarget(stepIdx: number, timeoutMs = 3000): Promise<void> {
+  const step = tourSteps[stepIdx]
+  if (!step || typeof step.target !== 'string') return Promise.resolve()
+  const selector = step.target
+  const start = performance.now()
+  return new Promise((resolve) => {
+    function tick() {
+      if (document.querySelector(selector)) {
+        resolve()
+        return
+      }
+      if (performance.now() - start >= timeoutMs) {
+        resolve()
+        return
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+}
 
 export default function App() {
   const [searchParams] = useSearchParams()
@@ -60,20 +87,20 @@ export default function App() {
         const currentRoute = stepRoutes[index]
         const needsNav = nextRoute !== undefined && nextRoute !== currentRoute
 
+        // Pause the tour while we navigate + wait for the target element to mount.
         setRunTour(false)
 
         if (needsNav) {
           navigate(nextRoute!)
-          setTimeout(() => {
-            setStepIndex(nextIndex)
-            setRunTour(true)
-          }, 1200)
-        } else {
-          setTimeout(() => {
-            setStepIndex(nextIndex)
-            setRunTour(true)
-          }, 150)
         }
+
+        // Poll for the next step's target to exist (capped at 3s). This avoids
+        // highlighting invisible elements on slow-mounting routes and makes the
+        // same-route transition feel instant when the target is already there.
+        waitForTourTarget(nextIndex, 3000).then(() => {
+          setStepIndex(nextIndex)
+          setRunTour(true)
+        })
       }
     },
     [navigate],
@@ -102,6 +129,7 @@ export default function App() {
             <Route path="/sell" element={<SellOptimizer />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/inputs" element={<Inputs />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
       </div>

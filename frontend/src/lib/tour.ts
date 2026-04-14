@@ -12,17 +12,7 @@ export const tourSteps: Step[] = [
     placement: 'bottom',
     disableBeacon: true,
   },
-  // ── Step 2: The hook (/) ──
-  {
-    target: '[data-tour="callout"]',
-    title: 'Two databases. Different prices. Same market.',
-    content:
-      'India has two government price databases: Agmarknet and eNAM. They disagree 5\u201312% of the time. ' +
-      'Nobody reconciles them. Farmers trust whichever middleman they ask. This tool investigates the gap.',
-    placement: 'bottom',
-    disableBeacon: true,
-  },
-  // ── Step 3: Live data (/) ──
+  // ── Step 2: Live data (/) ──
   {
     target: '[data-tour="metrics"]',
     title: '15 real mandis. 10 commodities. Updated daily.',
@@ -33,7 +23,7 @@ export const tourSteps: Step[] = [
     placement: 'top',
     disableBeacon: true,
   },
-  // ── Step 4: Price table (/) ──
+  // ── Step 3: Price table (/) ──
   {
     target: '[data-tour="price-table"]',
     title: 'Every price has a story',
@@ -44,7 +34,7 @@ export const tourSteps: Step[] = [
     placement: 'top',
     disableBeacon: true,
   },
-  // ── Step 5: Navigate to Forecast (/forecast) ──
+  // ── Step 4: Navigate to Forecast (/forecast) ──
   {
     target: '[data-tour="forecast-title"]',
     title: 'Should she sell now or wait two weeks?',
@@ -55,7 +45,7 @@ export const tourSteps: Step[] = [
     placement: 'bottom',
     disableBeacon: true,
   },
-  // ── Step 8: Forecast confidence (/forecast) ──
+  // ── Step 5: Forecast confidence (/forecast) ──
   {
     target: '[data-tour="forecast-metrics"]',
     title: 'The confidence band matters',
@@ -66,7 +56,7 @@ export const tourSteps: Step[] = [
     placement: 'bottom',
     disableBeacon: true,
   },
-  // ── Step 9: Navigate to Sell (/sell) ──
+  // ── Step 6: Navigate to Sell (/sell) ──
   {
     target: '[data-tour="sell-title"]',
     title: 'The full calculation',
@@ -77,7 +67,7 @@ export const tourSteps: Step[] = [
     placement: 'bottom',
     disableBeacon: true,
   },
-  // ── Step 10: Net price breakdown (/sell) ──
+  // ── Step 7: Net price breakdown (/sell) ──
   {
     target: '[data-tour="waterfall"]',
     title: 'Net price, not market price',
@@ -87,7 +77,7 @@ export const tourSteps: Step[] = [
     placement: 'top',
     disableBeacon: true,
   },
-  // ── Step 11: Credit readiness (/sell) ──
+  // ── Step 8: Credit readiness (/sell) ──
   {
     target: '[data-tour="credit-readiness"]',
     title: 'Should she borrow for next season?',
@@ -97,7 +87,7 @@ export const tourSteps: Step[] = [
     placement: 'top',
     disableBeacon: true,
   },
-  // ── Step 12: End on Pipeline ──
+  // ── Step 9: End on Pipeline ──
   {
     target: '[data-tour="nav-pipeline"]',
     title: 'How it all fits together',
@@ -112,15 +102,14 @@ export const tourSteps: Step[] = [
 
 export const stepRoutes: Record<number, string> = {
   0: '/',         // hero
-  1: '/',         // callout
-  2: '/',         // metrics
-  3: '/',         // price table
-  4: '/forecast', // forecast title
-  5: '/forecast', // forecast metrics
-  6: '/sell',     // sell title
-  7: '/sell',     // waterfall
-  8: '/sell',     // credit readiness
-  9: '/sell',     // nav-pipeline (end)
+  1: '/',         // metrics
+  2: '/',         // price table
+  3: '/forecast', // forecast title
+  4: '/forecast', // forecast metrics
+  5: '/sell',     // sell title
+  6: '/sell',     // waterfall
+  7: '/sell',     // credit readiness
+  8: '/sell',     // nav-pipeline (end)
 }
 
 export const tourStyles = {

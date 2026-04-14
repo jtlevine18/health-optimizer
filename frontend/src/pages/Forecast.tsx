@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   LineChart,
   Line,
@@ -30,6 +30,15 @@ export default function Forecast() {
   const [selectedCommodity, setSelectedCommodity] = useState<string | null>(null)
   const [selectedMandi, setSelectedMandi] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table')
+  const [isTransitioning, setIsTransitioning] = useState(false)
+
+  // Briefly flag a transition when selectors change so we don't render against
+  // stale derived state while React recomputes memoised values.
+  useEffect(() => {
+    setIsTransitioning(true)
+    const t = setTimeout(() => setIsTransitioning(false), 120)
+    return () => clearTimeout(t)
+  }, [selectedCommodity, selectedMandi])
 
   const forecasts = data?.price_forecasts ?? []
 
@@ -225,10 +234,14 @@ export default function Forecast() {
       {/* ── Commodity selector ──────────────────────────────────────────── */}
       <div className="mb-6 flex items-center gap-4">
         <div>
-          <label className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider mr-3">
+          <label
+            htmlFor="forecast-commodity-select"
+            className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider mr-3"
+          >
             Commodity
           </label>
           <select
+            id="forecast-commodity-select"
             value={activeCommodity ?? ''}
             onChange={(e) => { setSelectedCommodity(e.target.value); setSelectedMandi(null) }}
             className="px-3 py-2 text-sm font-sans rounded-lg border border-warm-border bg-white text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gold/30"
@@ -240,10 +253,14 @@ export default function Forecast() {
         </div>
         {mandiOptions.length > 1 && (
           <div>
-            <label className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider mr-3">
+            <label
+              htmlFor="forecast-mandi-select"
+              className="text-xs font-sans font-semibold text-warm-muted uppercase tracking-wider mr-3"
+            >
               Mandi
             </label>
             <select
+              id="forecast-mandi-select"
               value={activeMandi ?? ''}
               onChange={(e) => setSelectedMandi(e.target.value)}
               className="px-3 py-2 text-sm font-sans rounded-lg border border-warm-border bg-white text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gold/30"
@@ -332,7 +349,17 @@ export default function Forecast() {
                   key={`${f.mandi_id}-${f.commodity_id}`}
                   className={activeMandi === f.mandi_id ? '!bg-teal-50/50' : ''}
                   style={{ cursor: 'pointer' }}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={activeMandi === f.mandi_id}
+                  aria-label={`Select ${f.mandi_name} forecast`}
                   onClick={() => setSelectedMandi(f.mandi_id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setSelectedMandi(f.mandi_id)
+                    }
+                  }}
                 >
                   <td className="font-semibold text-[#1a1a1a]">{f.mandi_name}</td>
                   <td>{formatRs(f.current_price_rs)}</td>
@@ -442,7 +469,12 @@ export default function Forecast() {
       )}
 
       {/* ── Forecast chart ──────────────────────────────────────────────── */}
-      {selectedForecast && chartData.length > 0 && (
+      {isTransitioning && (
+        <div className="mb-8 card card-body text-center py-10">
+          <p className="text-sm text-warm-muted m-0">Loading forecast...</p>
+        </div>
+      )}
+      {!isTransitioning && selectedForecast && chartData.length > 0 && (
         <div className="mb-8">
           <div className="section-header">
             {activeCommodityName} at {selectedForecast.mandi_name} \u2014 Price Trend & Forecast
