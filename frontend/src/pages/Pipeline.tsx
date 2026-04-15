@@ -191,7 +191,7 @@ export default function Pipeline() {
             className={`tab-item ${tab === t ? 'active' : ''}`}
             onClick={() => setTab(t)}
           >
-            {t === 'runs' ? 'Run history' : t === 'cost' ? 'Cost & scale' : 'Build your own'}
+            {t === 'runs' ? 'Run history' : t === 'cost' ? 'Cost calculator' : 'Build your own'}
           </button>
         ))}
       </div>
@@ -323,7 +323,7 @@ export default function Pipeline() {
         </div>
       )}
 
-      {/* Cost & scale Tab */}
+      {/* Cost calculator Tab */}
       {tab === 'cost' && (
         <div className="animate-tab-enter space-y-10">
           <div>
