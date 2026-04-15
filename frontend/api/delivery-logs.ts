@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
   try {
     const dbUrl = process.env.DATABASE_URL
     if (!dbUrl) {
-      res.setHeader('Access-Control-Allow-Origin', '*')
       return res.json({ delivery_logs: [], total: 0 })
     }
     const { neon } = await import('@neondatabase/serverless')
@@ -17,9 +17,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       LIMIT 50
     `
 
-    res.setHeader('Access-Control-Allow-Origin', '*')
     res.json({ delivery_logs: rows, total: rows.length })
   } catch (e: any) {
-    res.status(500).json({ delivery_logs: [], total: 0, error: e.message })
+    // Table may not exist yet if the pipeline hasn't run since delivery_logs
+    // was added to the schema. Treat "undefined_table" (42P01) as empty, not 500.
+    if (e?.code === '42P01' || /does not exist/i.test(e?.message ?? '')) {
+      return res.json({ delivery_logs: [], total: 0 })
+    }
+    res.status(500).json({ delivery_logs: [], total: 0, error: e?.message ?? String(e) })
   }
 }
