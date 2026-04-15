@@ -73,10 +73,30 @@ export default function Forecast() {
   const selectedForecast =
     filteredForecasts.find((f) => f.mandi_id === activeMandi) ?? null
 
+  // direction values from the API are hardcoded 'flat' — derive the real
+  // trend from 7-day vs current price so the metric reflects the chart.
+  const priceDirection = (f: {
+    current_price_rs?: number | null
+    price_7d?: number | null
+  }): 'up' | 'down' | 'flat' => {
+    const cur = f.current_price_rs ?? 0
+    const p7 = f.price_7d ?? 0
+    if (!cur || !p7) return 'flat'
+    const delta = (p7 - cur) / cur
+    if (delta > 0.02) return 'up'
+    if (delta < -0.02) return 'down'
+    return 'flat'
+  }
+
+  const trendingUpCount = useMemo(
+    () => filteredForecasts.filter((f) => priceDirection(f) === 'up').length,
+    [filteredForecasts],
+  )
+
   const avgDirection = useMemo(() => {
     if (!forecasts.length) return 'flat'
-    const upCount = forecasts.filter((f) => f.direction === 'up').length
-    const downCount = forecasts.filter((f) => f.direction === 'down').length
+    const upCount = forecasts.filter((f) => priceDirection(f) === 'up').length
+    const downCount = forecasts.filter((f) => priceDirection(f) === 'down').length
     if (upCount > downCount) return 'up'
     if (downCount > upCount) return 'down'
     return 'flat'
@@ -272,8 +292,8 @@ export default function Forecast() {
         <MetricCard label="Commodities forecasted" value={commodities.length} subtitle="across all markets" />
         <MetricCard
           label="Markets trending up"
-          value={`${forecasts.filter((f) => f.direction === 'up').length} / ${forecasts.length}`}
-          subtitle="over next 7 days"
+          value={`${trendingUpCount} / ${filteredForecasts.length}`}
+          subtitle={`${activeCommodityName || 'selected commodity'} · next 7 days`}
         />
         <MetricCard
           label="Avg confidence"
