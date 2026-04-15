@@ -23,6 +23,8 @@ export default function SellOptimizer() {
   const deliveryLogs = useDeliveryLogs()
   const [selectedFarmer, setSelectedFarmer] = useState<number>(0)
   const [expandedReasoning, setExpandedReasoning] = useState<number | null>(null)
+  const [farmerTab, setFarmerTab] = useState<'sell' | 'credit'>('sell')
+  const [breakdownOpen, setBreakdownOpen] = useState<boolean>(false)
 
   const recs = recommendations.data?.sell_recommendations ?? []
   const allMandis = mandis.data?.mandis ?? []
@@ -265,450 +267,518 @@ export default function SellOptimizer() {
         </div>
       </div>
 
-      {/* ── Waterfall: Net Price Breakdown ────────────────────── */}
-      {activeFarmer &&
-        (() => {
-          const best = activeFarmer.best_option
-          const marketPrice = best.market_price_rs
-          const transport = best.transport_cost_rs
-          const storage = best.storage_loss_rs
-          const fee = best.mandi_fee_rs
-          const net = best.net_price_rs
-          const totalDeductions = transport + storage + fee
+      {/* ── Farmer-scoped tabs ─────────────────────────────────── */}
+      {activeFarmer && (
+        <div style={{ marginBottom: '56px' }}>
+          <div className="tab-list" style={{ marginBottom: '32px' }}>
+            {(['sell', 'credit'] as const).map((t) => (
+              <button
+                key={t}
+                className={`tab-item ${farmerTab === t ? 'active' : ''}`}
+                onClick={() => setFarmerTab(t)}
+              >
+                {t === 'sell' ? 'Sell plan' : 'Credit readiness'}
+              </button>
+            ))}
+          </div>
 
-          const rows = [
-            { label: 'Market price', value: marketPrice, sign: '' },
-            { label: 'Transport', value: -transport, sign: '−' },
-            { label: 'Storage loss', value: -storage, sign: '−' },
-            { label: 'Market vendor fee', value: -fee, sign: '−' },
-          ]
+          {/* ── Tab: Sell plan ────────────────────────────────── */}
+          {farmerTab === 'sell' && (
+            <div className="animate-tab-enter">
+              {/* Map */}
+              <div style={{ marginBottom: '40px' }}>
+                <div className="section-header">{activeFarmer.farmer_name} &mdash; sell options map</div>
+                <div
+                  style={{
+                    height: 400,
+                    border: '1px solid #e8e5e1',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <MapContainer
+                    center={[activeFarmer.farmer_lat, activeFarmer.farmer_lon]}
+                    zoom={9}
+                    style={{ height: '100%', width: '100%' }}
+                    scrollWheelZoom={false}
+                    attributionControl={false}
+                  >
+                    <TileLayer
+                      url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                      attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+                    />
 
-          return (
-            <div data-tour="waterfall" style={{ marginBottom: '56px' }}>
-              <div className="section-header">How the net price is calculated</div>
+                    {activeFarmer.all_options.map((opt, i) => {
+                      const mandiPos = mandiCoords.get(opt.mandi_id)
+                      if (!mandiPos) return null
+                      return (
+                        <Polyline
+                          key={`route-${i}`}
+                          positions={[[activeFarmer.farmer_lat, activeFarmer.farmer_lon], mandiPos]}
+                          pathOptions={{
+                            color: netPriceColor(opt.net_price_rs, bestNetPrice),
+                            weight: opt.mandi_id === activeFarmer.best_option.mandi_id ? 2.5 : 1,
+                            opacity: opt.mandi_id === activeFarmer.best_option.mandi_id ? 0.9 : 0.4,
+                            dashArray:
+                              opt.mandi_id === activeFarmer.best_option.mandi_id ? undefined : '4 4',
+                          }}
+                        />
+                      )
+                    })}
+
+                    {activeFarmer.all_options.map((opt) => {
+                      const mandiPos = mandiCoords.get(opt.mandi_id)
+                      if (!mandiPos) return null
+                      const isBest = opt.mandi_id === activeFarmer.best_option.mandi_id
+                      return (
+                        <CircleMarker
+                          key={opt.mandi_id}
+                          center={mandiPos}
+                          radius={isBest ? 9 : 6}
+                          pathOptions={{
+                            color: '#ffffff',
+                            weight: 2,
+                            fillColor: netPriceColor(opt.net_price_rs, bestNetPrice),
+                            fillOpacity: 0.9,
+                          }}
+                        >
+                          <Popup>
+                            <div
+                              style={{
+                                fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                                minWidth: 180,
+                                color: '#1b1e2d',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontFamily: '"Source Serif 4", Georgia, serif',
+                                  fontSize: '15px',
+                                  marginBottom: '6px',
+                                }}
+                              >
+                                {opt.mandi_name}
+                              </div>
+                              <div style={{ fontSize: '12px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                                  <span style={{ color: '#8d909e' }}>Timing</span>
+                                  <span>{opt.sell_timing}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                                  <span style={{ color: '#8d909e' }}>Market</span>
+                                  <span>{formatRs(opt.market_price_rs)}</span>
+                                </div>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    padding: '4px 0',
+                                    borderTop: '1px solid #e8e5e1',
+                                    marginTop: '4px',
+                                  }}
+                                >
+                                  <span>Net</span>
+                                  <span style={{ color: '#446b26' }}>
+                                    {formatRs(opt.net_price_rs)}/q
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                                  <span style={{ color: '#8d909e' }}>Distance</span>
+                                  <span>{opt.distance_km.toFixed(0)} km</span>
+                                </div>
+                              </div>
+                            </div>
+                          </Popup>
+                        </CircleMarker>
+                      )
+                    })}
+
+                    <CircleMarker
+                      center={[activeFarmer.farmer_lat, activeFarmer.farmer_lon]}
+                      radius={8}
+                      pathOptions={{
+                        color: '#446b26',
+                        weight: 2,
+                        fillColor: '#ffffff',
+                        fillOpacity: 1,
+                      }}
+                    >
+                      <Popup>
+                        <div
+                          style={{
+                            fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                            color: '#1b1e2d',
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontFamily: '"Source Serif 4", Georgia, serif',
+                              fontSize: '15px',
+                            }}
+                          >
+                            {activeFarmer.farmer_name}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#8d909e', marginTop: '2px' }}>
+                            {activeFarmer.commodity_name} &middot; {activeFarmer.quantity_quintals} quintals
+                          </div>
+                        </div>
+                      </Popup>
+                    </CircleMarker>
+                  </MapContainer>
+                </div>
+              </div>
+
+              {/* Options table */}
+              {sortedOptions.length > 0 && (
+                <div style={{ marginBottom: '32px' }}>
+                  <div className="section-header">
+                    {activeFarmer.farmer_name} &mdash; all options ranked
+                  </div>
+                  <table className="etable">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Market</th>
+                        <th>Timing</th>
+                        <th className="num">Price</th>
+                        <th className="num">Transport</th>
+                        <th className="num">Storage</th>
+                        <th className="num">Fee</th>
+                        <th className="num">Net</th>
+                        <th className="num">Dist</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedOptions.map((opt, idx) => {
+                        const isBest = idx === 0
+                        return (
+                          <tr key={`${opt.mandi_id}-${opt.sell_timing}`}>
+                            <td>
+                              {isBest ? (
+                                <span style={{ color: '#446b26' }}>best</span>
+                              ) : (
+                                <span style={{ color: '#8d909e' }}>{idx + 1}</span>
+                              )}
+                            </td>
+                            <td style={{ fontWeight: 500 }}>{opt.mandi_name}</td>
+                            <td>{opt.sell_timing}</td>
+                            <td className="num">{formatRs(opt.market_price_rs)}</td>
+                            <td className="num" style={{ color: '#c71f48' }}>
+                              −{formatRs(opt.transport_cost_rs)}
+                            </td>
+                            <td className="num" style={{ color: '#c71f48' }}>
+                              −{formatRs(opt.storage_loss_rs)}
+                            </td>
+                            <td className="num" style={{ color: '#c71f48' }}>
+                              −{formatRs(opt.mandi_fee_rs)}
+                            </td>
+                            <td
+                              className="num"
+                              style={{
+                                color: netPriceColor(opt.net_price_rs, bestNetPrice),
+                                fontWeight: 600,
+                              }}
+                            >
+                              {formatRs(opt.net_price_rs)}
+                            </td>
+                            <td className="num" style={{ color: '#8d909e' }}>
+                              {opt.distance_km.toFixed(0)} km
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Inline disclosure: net price breakdown for the best option */}
+              {(() => {
+                const best = activeFarmer.best_option
+                const marketPrice = best.market_price_rs
+                const transport = best.transport_cost_rs
+                const storage = best.storage_loss_rs
+                const fee = best.mandi_fee_rs
+                const net = best.net_price_rs
+                const totalDeductions = transport + storage + fee
+
+                const rows = [
+                  { label: 'Market price', value: marketPrice, sign: '' },
+                  { label: 'Transport', value: -transport, sign: '−' },
+                  { label: 'Storage loss', value: -storage, sign: '−' },
+                  { label: 'Market vendor fee', value: -fee, sign: '−' },
+                ]
+
+                return (
+                  <div data-tour="waterfall" style={{ marginBottom: '24px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setBreakdownOpen((o) => !o)}
+                      aria-expanded={breakdownOpen}
+                      className="text-link"
+                      style={{
+                        fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                        fontSize: '13px',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {breakdownOpen ? '−' : '+'} How the net price is calculated
+                    </button>
+                    {breakdownOpen && (
+                      <div className="animate-tab-enter" style={{ marginTop: '16px' }}>
+                        <p
+                          style={{
+                            fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                            fontSize: '13px',
+                            color: '#606373',
+                            marginBottom: '16px',
+                          }}
+                        >
+                          {activeFarmer.farmer_name} &rarr; {best.mandi_name} ({best.sell_timing})
+                        </p>
+                        <table className="etable" style={{ maxWidth: '560px' }}>
+                          <tbody>
+                            {rows.map((r) => (
+                              <tr key={r.label}>
+                                <td style={{ color: r.label === 'Market price' ? '#1b1e2d' : '#606373' }}>
+                                  {r.label}
+                                </td>
+                                <td
+                                  className="num"
+                                  style={{
+                                    textAlign: 'right',
+                                    color: r.value < 0 ? '#c71f48' : '#1b1e2d',
+                                  }}
+                                >
+                                  {r.sign}
+                                  {formatRs(Math.abs(r.value))}
+                                </td>
+                              </tr>
+                            ))}
+                            <tr>
+                              <td
+                                style={{
+                                  fontFamily: '"Source Serif 4", Georgia, serif',
+                                  color: '#1b1e2d',
+                                }}
+                              >
+                                Net to farmer
+                              </td>
+                              <td
+                                className="num"
+                                style={{
+                                  textAlign: 'right',
+                                  fontFamily: '"Source Serif 4", Georgia, serif',
+                                  fontSize: '20px',
+                                  color: '#446b26',
+                                }}
+                              >
+                                {formatRs(net)}/q
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <p
+                          style={{
+                            fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                            fontSize: '12px',
+                            color: '#8d909e',
+                            marginTop: '12px',
+                          }}
+                        >
+                          Deductions total {formatRs(totalDeductions)} &middot;{' '}
+                          {marketPrice > 0 ? ((totalDeductions / marketPrice) * 100).toFixed(1) : '0'}% of
+                          market price.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
+          {/* ── Tab: Credit readiness ─────────────────────────── */}
+          {farmerTab === 'credit' && (
+            <div className="animate-tab-enter" data-tour="credit-readiness">
               <p
                 style={{
                   fontFamily: '"Space Grotesk", system-ui, sans-serif',
                   fontSize: '13px',
                   color: '#606373',
-                  marginTop: '-4px',
-                  marginBottom: '20px',
+                  lineHeight: 1.7,
+                  maxWidth: '640px',
+                  marginBottom: '32px',
                 }}
               >
-                {activeFarmer.farmer_name} &rarr; {best.mandi_name} ({best.sell_timing})
+                Once the sell plan sets expected revenue, the same forecast and
+                cost assumptions feed a second question: can this harvest
+                comfortably service a short-term input loan? Credit readiness
+                lives here because it's downstream of the sell decision &mdash;
+                change the best market and the loan ceiling moves with it.
               </p>
-              <table className="etable" style={{ maxWidth: '560px' }}>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.label}>
-                      <td style={{ color: r.label === 'Market price' ? '#1b1e2d' : '#606373' }}>
-                        {r.label}
-                      </td>
-                      <td
-                        className="num"
-                        style={{
-                          textAlign: 'right',
-                          color: r.value < 0 ? '#c71f48' : '#1b1e2d',
-                        }}
-                      >
-                        {r.sign}
-                        {formatRs(Math.abs(r.value))}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td
-                      style={{
-                        fontFamily: '"Source Serif 4", Georgia, serif',
-                        color: '#1b1e2d',
-                      }}
-                    >
-                      Net to farmer
-                    </td>
-                    <td
-                      className="num"
-                      style={{
-                        textAlign: 'right',
-                        fontFamily: '"Source Serif 4", Georgia, serif',
-                        fontSize: '20px',
-                        color: '#446b26',
-                      }}
-                    >
-                      {formatRs(net)}/q
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <p
-                style={{
-                  fontFamily: '"Space Grotesk", system-ui, sans-serif',
-                  fontSize: '12px',
-                  color: '#8d909e',
-                  marginTop: '12px',
-                }}
-              >
-                Deductions total {formatRs(totalDeductions)} &middot;{' '}
-                {marketPrice > 0 ? ((totalDeductions / marketPrice) * 100).toFixed(1) : '0'}% of
-                market price.
-              </p>
-            </div>
-          )
-        })()}
 
-      {/* ── Credit Readiness ─────────────────────────────────── */}
-      {activeFarmer?.credit_readiness && (
-        <div data-tour="credit-readiness" style={{ marginBottom: '56px' }}>
-          <div className="section-header">
-            {activeFarmer.farmer_name} &mdash; credit readiness
-          </div>
-          {(() => {
-            const cr = activeFarmer.credit_readiness!
-            const label =
-              cr.readiness === 'strong'
-                ? 'Strong'
-                : cr.readiness === 'moderate'
-                  ? 'Moderate'
-                  : 'Not yet'
-            const color =
-              cr.readiness === 'strong'
-                ? '#4a7c59'
-                : cr.readiness === 'moderate'
-                  ? '#446b26'
-                  : '#c71f48'
-            return (
-              <div
-                style={{
-                  borderLeft: `2px solid ${color}`,
-                  paddingLeft: '20px',
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto',
-                  columnGap: '48px',
-                  rowGap: '20px',
-                }}
-              >
+              {activeFarmer.credit_readiness ? (
                 <div>
-                  <div className="eyebrow" style={{ color }}>
-                    {label}
+                  <div className="section-header">
+                    {activeFarmer.farmer_name} &mdash; credit readiness
                   </div>
-                  <p
-                    style={{
-                      fontFamily: '"Source Serif 4", Georgia, serif',
-                      fontSize: '18px',
-                      lineHeight: '26px',
-                      color: '#1b1e2d',
-                      marginTop: '8px',
-                      maxWidth: '560px',
-                    }}
-                  >
-                    {cr.advice_en}
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div className="eyebrow">Expected revenue</div>
-                  <p className="metric-number" style={{ marginTop: '4px' }}>
-                    {formatRs(cr.expected_revenue_rs)}
-                  </p>
-                  <div className="eyebrow" style={{ marginTop: '14px' }}>
-                    Max advisable loan
-                  </div>
-                  <p
-                    style={{
-                      fontFamily: '"Source Serif 4", Georgia, serif',
-                      fontSize: '22px',
-                      color,
-                      marginTop: '4px',
-                    }}
-                  >
-                    {formatRs(cr.max_advisable_input_loan_rs)}
-                  </p>
-                </div>
-                {(cr.strengths.length > 0 || cr.risks.length > 0) && (
-                  <div
-                    style={{
-                      gridColumn: '1 / -1',
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: '32px',
-                      borderTop: '1px solid #e8e5e1',
-                      paddingTop: '16px',
-                    }}
-                  >
-                    {cr.strengths.length > 0 && (
-                      <div>
-                        <div className="eyebrow">Strengths</div>
-                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0 0' }}>
-                          {cr.strengths.map((item, i) => (
-                            <li
-                              key={i}
-                              style={{
-                                fontFamily: '"Space Grotesk", system-ui, sans-serif',
-                                fontSize: '13px',
-                                lineHeight: 1.7,
-                                color: '#606373',
-                                paddingLeft: '14px',
-                                position: 'relative',
-                              }}
-                            >
-                              <span
-                                style={{
-                                  position: 'absolute',
-                                  left: 0,
-                                  color: '#4a7c59',
-                                }}
-                              >
-                                +
-                              </span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {cr.risks.length > 0 && (
-                      <div>
-                        <div className="eyebrow">Risks</div>
-                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0 0' }}>
-                          {cr.risks.map((item, i) => (
-                            <li
-                              key={i}
-                              style={{
-                                fontFamily: '"Space Grotesk", system-ui, sans-serif',
-                                fontSize: '13px',
-                                lineHeight: 1.7,
-                                color: '#606373',
-                                paddingLeft: '14px',
-                                position: 'relative',
-                              }}
-                            >
-                              <span
-                                style={{
-                                  position: 'absolute',
-                                  left: 0,
-                                  color: '#c71f48',
-                                }}
-                              >
-                                −
-                              </span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })()}
-        </div>
-      )}
-
-      {/* ── Map ───────────────────────────────────────────────── */}
-      {activeFarmer && (
-        <div style={{ marginBottom: '56px' }}>
-          <div className="section-header">{activeFarmer.farmer_name} &mdash; sell options map</div>
-          <div
-            style={{
-              height: 400,
-              border: '1px solid #e8e5e1',
-              borderRadius: '4px',
-              overflow: 'hidden',
-            }}
-          >
-            <MapContainer
-              center={[activeFarmer.farmer_lat, activeFarmer.farmer_lon]}
-              zoom={9}
-              style={{ height: '100%', width: '100%' }}
-              scrollWheelZoom={false}
-              attributionControl={false}
-            >
-              <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-              />
-
-              {activeFarmer.all_options.map((opt, i) => {
-                const mandiPos = mandiCoords.get(opt.mandi_id)
-                if (!mandiPos) return null
-                return (
-                  <Polyline
-                    key={`route-${i}`}
-                    positions={[[activeFarmer.farmer_lat, activeFarmer.farmer_lon], mandiPos]}
-                    pathOptions={{
-                      color: netPriceColor(opt.net_price_rs, bestNetPrice),
-                      weight: opt.mandi_id === activeFarmer.best_option.mandi_id ? 2.5 : 1,
-                      opacity: opt.mandi_id === activeFarmer.best_option.mandi_id ? 0.9 : 0.4,
-                      dashArray:
-                        opt.mandi_id === activeFarmer.best_option.mandi_id ? undefined : '4 4',
-                    }}
-                  />
-                )
-              })}
-
-              {activeFarmer.all_options.map((opt) => {
-                const mandiPos = mandiCoords.get(opt.mandi_id)
-                if (!mandiPos) return null
-                const isBest = opt.mandi_id === activeFarmer.best_option.mandi_id
-                return (
-                  <CircleMarker
-                    key={opt.mandi_id}
-                    center={mandiPos}
-                    radius={isBest ? 9 : 6}
-                    pathOptions={{
-                      color: '#ffffff',
-                      weight: 2,
-                      fillColor: netPriceColor(opt.net_price_rs, bestNetPrice),
-                      fillOpacity: 0.9,
-                    }}
-                  >
-                    <Popup>
+                  {(() => {
+                    const cr = activeFarmer.credit_readiness!
+                    const label =
+                      cr.readiness === 'strong'
+                        ? 'Strong'
+                        : cr.readiness === 'moderate'
+                          ? 'Moderate'
+                          : 'Not yet'
+                    const color =
+                      cr.readiness === 'strong'
+                        ? '#4a7c59'
+                        : cr.readiness === 'moderate'
+                          ? '#446b26'
+                          : '#c71f48'
+                    return (
                       <div
                         style={{
-                          fontFamily: '"Space Grotesk", system-ui, sans-serif',
-                          minWidth: 180,
-                          color: '#1b1e2d',
+                          borderLeft: `2px solid ${color}`,
+                          paddingLeft: '20px',
+                          display: 'grid',
+                          gridTemplateColumns: '1fr auto',
+                          columnGap: '48px',
+                          rowGap: '20px',
                         }}
                       >
-                        <div
-                          style={{
-                            fontFamily: '"Source Serif 4", Georgia, serif',
-                            fontSize: '15px',
-                            marginBottom: '6px',
-                          }}
-                        >
-                          {opt.mandi_name}
-                        </div>
-                        <div style={{ fontSize: '12px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                            <span style={{ color: '#8d909e' }}>Timing</span>
-                            <span>{opt.sell_timing}</span>
+                        <div>
+                          <div className="eyebrow" style={{ color }}>
+                            {label}
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                            <span style={{ color: '#8d909e' }}>Market</span>
-                            <span>{formatRs(opt.market_price_rs)}</span>
-                          </div>
-                          <div
+                          <p
                             style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              padding: '4px 0',
-                              borderTop: '1px solid #e8e5e1',
+                              fontFamily: '"Source Serif 4", Georgia, serif',
+                              fontSize: '18px',
+                              lineHeight: '26px',
+                              color: '#1b1e2d',
+                              marginTop: '8px',
+                              maxWidth: '560px',
+                            }}
+                          >
+                            {cr.advice_en}
+                          </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div className="eyebrow">Expected revenue</div>
+                          <p className="metric-number" style={{ marginTop: '4px' }}>
+                            {formatRs(cr.expected_revenue_rs)}
+                          </p>
+                          <div className="eyebrow" style={{ marginTop: '14px' }}>
+                            Max advisable loan
+                          </div>
+                          <p
+                            style={{
+                              fontFamily: '"Source Serif 4", Georgia, serif',
+                              fontSize: '22px',
+                              color,
                               marginTop: '4px',
                             }}
                           >
-                            <span>Net</span>
-                            <span style={{ color: '#446b26' }}>
-                              {formatRs(opt.net_price_rs)}/q
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                            <span style={{ color: '#8d909e' }}>Distance</span>
-                            <span>{opt.distance_km.toFixed(0)} km</span>
-                          </div>
+                            {formatRs(cr.max_advisable_input_loan_rs)}
+                          </p>
                         </div>
+                        {(cr.strengths.length > 0 || cr.risks.length > 0) && (
+                          <div
+                            style={{
+                              gridColumn: '1 / -1',
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 1fr',
+                              gap: '32px',
+                              borderTop: '1px solid #e8e5e1',
+                              paddingTop: '16px',
+                            }}
+                          >
+                            {cr.strengths.length > 0 && (
+                              <div>
+                                <div className="eyebrow">Strengths</div>
+                                <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0 0' }}>
+                                  {cr.strengths.map((item, i) => (
+                                    <li
+                                      key={i}
+                                      style={{
+                                        fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                                        fontSize: '13px',
+                                        lineHeight: 1.7,
+                                        color: '#606373',
+                                        paddingLeft: '14px',
+                                        position: 'relative',
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          position: 'absolute',
+                                          left: 0,
+                                          color: '#4a7c59',
+                                        }}
+                                      >
+                                        +
+                                      </span>
+                                      {item}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {cr.risks.length > 0 && (
+                              <div>
+                                <div className="eyebrow">Risks</div>
+                                <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0 0' }}>
+                                  {cr.risks.map((item, i) => (
+                                    <li
+                                      key={i}
+                                      style={{
+                                        fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                                        fontSize: '13px',
+                                        lineHeight: 1.7,
+                                        color: '#606373',
+                                        paddingLeft: '14px',
+                                        position: 'relative',
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          position: 'absolute',
+                                          left: 0,
+                                          color: '#c71f48',
+                                        }}
+                                      >
+                                        −
+                                      </span>
+                                      {item}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </Popup>
-                  </CircleMarker>
-                )
-              })}
-
-              <CircleMarker
-                center={[activeFarmer.farmer_lat, activeFarmer.farmer_lon]}
-                radius={8}
-                pathOptions={{
-                  color: '#446b26',
-                  weight: 2,
-                  fillColor: '#ffffff',
-                  fillOpacity: 1,
-                }}
-              >
-                <Popup>
-                  <div
-                    style={{
-                      fontFamily: '"Space Grotesk", system-ui, sans-serif',
-                      color: '#1b1e2d',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: '"Source Serif 4", Georgia, serif',
-                        fontSize: '15px',
-                      }}
-                    >
-                      {activeFarmer.farmer_name}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#8d909e', marginTop: '2px' }}>
-                      {activeFarmer.commodity_name} &middot; {activeFarmer.quantity_quintals} quintals
-                    </div>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            </MapContainer>
-          </div>
-        </div>
-      )}
-
-      {/* ── Options table ──────────────────────────────────────── */}
-      {activeFarmer && sortedOptions.length > 0 && (
-        <div style={{ marginBottom: '56px' }}>
-          <div className="section-header">
-            {activeFarmer.farmer_name} &mdash; all options ranked
-          </div>
-          <table className="etable">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Market</th>
-                <th>Timing</th>
-                <th className="num">Price</th>
-                <th className="num">Transport</th>
-                <th className="num">Storage</th>
-                <th className="num">Fee</th>
-                <th className="num">Net</th>
-                <th className="num">Dist</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedOptions.map((opt, idx) => {
-                const isBest = idx === 0
-                return (
-                  <tr key={`${opt.mandi_id}-${opt.sell_timing}`}>
-                    <td>
-                      {isBest ? (
-                        <span style={{ color: '#446b26' }}>best</span>
-                      ) : (
-                        <span style={{ color: '#8d909e' }}>{idx + 1}</span>
-                      )}
-                    </td>
-                    <td style={{ fontWeight: 500 }}>{opt.mandi_name}</td>
-                    <td>{opt.sell_timing}</td>
-                    <td className="num">{formatRs(opt.market_price_rs)}</td>
-                    <td className="num" style={{ color: '#c71f48' }}>
-                      −{formatRs(opt.transport_cost_rs)}
-                    </td>
-                    <td className="num" style={{ color: '#c71f48' }}>
-                      −{formatRs(opt.storage_loss_rs)}
-                    </td>
-                    <td className="num" style={{ color: '#c71f48' }}>
-                      −{formatRs(opt.mandi_fee_rs)}
-                    </td>
-                    <td
-                      className="num"
-                      style={{
-                        color: netPriceColor(opt.net_price_rs, bestNetPrice),
-                        fontWeight: 600,
-                      }}
-                    >
-                      {formatRs(opt.net_price_rs)}
-                    </td>
-                    <td className="num" style={{ color: '#8d909e' }}>
-                      {opt.distance_km.toFixed(0)} km
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                    )
+                  })()}
+                </div>
+              ) : (
+                <p
+                  style={{
+                    fontFamily: '"Space Grotesk", system-ui, sans-serif',
+                    fontSize: '13px',
+                    color: '#8d909e',
+                  }}
+                >
+                  Credit readiness assessment not available for this farmer.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
