@@ -23,18 +23,7 @@ export const tourSteps: Step[] = [
     placement: 'top',
     disableBeacon: true,
   },
-  // ── Step 3: Market network (/) ──
-  {
-    target: '[data-tour="market-network"]',
-    title: 'Fifteen live markets, side by side',
-    content:
-      'Each pin is a regulated wholesale market pulling fresh prices every week. ' +
-      'Green pins mark markets where the two government databases disagreed on this week\u2019s prices \u2014 ' +
-      'conflicts the AI investigated and resolved. The Data page shows every reconciled price with its confidence score.',
-    placement: 'top',
-    disableBeacon: true,
-  },
-  // ── Step 4: Navigate to Forecast (/forecast) ──
+  // ── Step 3: Navigate to Forecast (/forecast) ──
   {
     target: '[data-tour="forecast-title"]',
     title: 'Should she sell now or wait two weeks?',

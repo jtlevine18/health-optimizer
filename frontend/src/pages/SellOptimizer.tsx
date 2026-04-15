@@ -71,7 +71,7 @@ export default function SellOptimizer() {
       <div data-tour="sell-title" style={{ marginBottom: '20px' }}>
         <h1 className="page-title">Sell recommendations</h1>
         <p className="page-caption" style={{ maxWidth: '620px' }}>
-          For each enrolled farmer, the broker agent computes net price at every market and every sell date, subtracts transport and storage, and picks the best outcome.
+          The best market, best day, and net-after-cost price for every farmer persona.
         </p>
       </div>
 

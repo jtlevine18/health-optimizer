@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
-import '../lib/leaflet-fix'
 import MetricCard from '../components/MetricCard'
 import { DashboardSkeleton, ErrorState } from '../components/LoadingState'
 import {
   usePipelineStats,
   useMarketPrices,
-  useMandis,
   usePriceConflicts,
   usePriceForecasts,
   useSellRecommendations,
@@ -622,19 +619,7 @@ function PipelineHero() {
 export default function MarketPrices() {
   const stats = usePipelineStats()
   const prices = useMarketPrices()
-  const mandis = useMandis()
   const conflicts = usePriceConflicts()
-
-  // ── Conflict counts per mandi (for map coloring) ──────────────────────
-  const conflictsByMandi = useMemo(() => {
-    const counts = new Map<string, number>()
-    if (conflicts.data?.price_conflicts) {
-      for (const c of conflicts.data.price_conflicts) {
-        counts.set(c.mandi_id, (counts.get(c.mandi_id) ?? 0) + 1)
-      }
-    }
-    return counts
-  }, [conflicts.data])
 
   if (stats.isLoading || prices.isLoading) return <DashboardSkeleton />
   if (stats.isError) return <ErrorState onRetry={() => stats.refetch()} />
@@ -687,128 +672,6 @@ export default function MarketPrices() {
         />
       </div>
 
-      {/* ── Map ───────────────────────────────────────────────────────────── */}
-      <div data-tour="market-network" style={{ marginBottom: '24px' }}>
-        <div className="section-header">Market network</div>
-        <div
-          style={{
-            height: 420,
-            border: '1px solid #e8e5e1',
-            borderRadius: '4px',
-            overflow: 'hidden',
-          }}
-        >
-          <MapContainer
-            center={[10.8, 78.8]}
-            zoom={7}
-            style={{ height: '100%', width: '100%' }}
-            scrollWheelZoom={false}
-            attributionControl={false}
-          >
-            <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-            />
-
-            {(mandis.data?.mandis ?? []).map((mandi) => {
-              const conflictCount = conflictsByMandi.get(mandi.mandi_id) ?? 0
-              const pinColor = conflictCount > 0 ? '#446b26' : '#606373'
-
-              return (
-                <CircleMarker
-                  key={mandi.mandi_id}
-                  center={[mandi.latitude, mandi.longitude]}
-                  radius={7}
-                  pathOptions={{
-                    color: '#ffffff',
-                    weight: 2,
-                    fillColor: pinColor,
-                    fillOpacity: 0.9,
-                  }}
-                >
-                  <Popup>
-                    <div
-                      style={{
-                        fontFamily: '"Space Grotesk", system-ui, sans-serif',
-                        minWidth: 200,
-                        color: '#1b1e2d',
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontFamily: '"Source Serif 4", Georgia, serif',
-                          fontWeight: 400,
-                          fontSize: '16px',
-                          marginBottom: '6px',
-                        }}
-                      >
-                        {mandi.name}
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#8d909e', marginBottom: '10px' }}>
-                        {mandi.district} &middot; {mandi.market_type}
-                        {mandi.enam_integrated && ' · eNAM'}
-                      </div>
-                      <div style={{ fontSize: '12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                          <span style={{ color: '#8d909e' }}>Commodities</span>
-                          <span>{mandi.commodities_traded.length}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                          <span style={{ color: '#8d909e' }}>Reporting</span>
-                          <span>{mandi.reporting_quality}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                          <span style={{ color: '#8d909e' }}>Conflicts</span>
-                          <span style={{ color: conflictCount > 0 ? '#446b26' : '#606373' }}>
-                            {conflictCount}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              )
-            })}
-          </MapContainer>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '24px',
-            marginTop: '12px',
-            fontFamily: '"Space Grotesk", system-ui, sans-serif',
-            fontSize: '12px',
-            color: '#606373',
-          }}
-        >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <span
-              style={{
-                display: 'inline-block',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: '#606373',
-              }}
-            />
-            No conflicts
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <span
-              style={{
-                display: 'inline-block',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: '#446b26',
-              }}
-            />
-            Active conflicts
-          </span>
-        </div>
-      </div>
     </div>
   )
 }

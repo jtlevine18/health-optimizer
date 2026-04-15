@@ -202,7 +202,7 @@ export default function Forecast() {
       <div data-tour="forecast-title" style={{ marginBottom: '20px' }}>
         <h1 className="page-title">Price forecast</h1>
         <p className="page-caption" style={{ maxWidth: '620px' }}>
-          Chronos-2 — Amazon's open time-series foundation model — forecasts where prices are headed over the next 7, 14, and 30 days, with honest confidence bands adjusted for each market's historical bias.
+          Seven, fourteen, and thirty day price predictions with confidence bands.
         </p>
       </div>
 
