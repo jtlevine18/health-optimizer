@@ -64,7 +64,7 @@ export default function Sidebar() {
       {dataMode && (
         <div
           style={{
-            padding: '12px 20px',
+            padding: '12px 20px 6px',
             borderTop: '1px solid rgba(255,255,255,0.06)',
             fontFamily: '"Space Grotesk", system-ui, sans-serif',
             fontSize: '10px',
@@ -77,6 +77,17 @@ export default function Sidebar() {
           {dataMode === 'live' ? 'Live · Agmarknet data.gov.in' : 'Demo · seed=42'}
         </div>
       )}
+      <div
+        style={{
+          padding: dataMode ? '0 20px 12px' : '12px 20px',
+          borderTop: dataMode ? undefined : '1px solid rgba(255,255,255,0.06)',
+          fontFamily: '"Space Grotesk", system-ui, sans-serif',
+          fontSize: '10px',
+          color: '#8d909e',
+        }}
+      >
+        Farmer personas are simulated
+      </div>
 
       <style>{`
         .sidebar-link {
