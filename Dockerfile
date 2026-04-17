@@ -28,10 +28,16 @@ USER root
 COPY config.py .
 COPY src/ src/
 COPY markets.json commodities.json farmers.json ./
+COPY markets_kenya.json commodities_kenya.json farmers_kenya.json ./
+COPY data/ data/
 RUN mkdir -p models
 RUN chown -R appuser:appuser /app
 
 USER appuser
+
+# Default to Kenya per Phase 11 product decision. Override at deploy
+# time with -e MARKET_INTEL_REGION=india to run the Tamil Nadu config.
+ENV MARKET_INTEL_REGION=kenya
 
 EXPOSE 7860
 

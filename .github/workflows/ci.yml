@@ -9,6 +9,13 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        region: [india, kenya]
+    env:
+      MARKET_INTEL_REGION: ${{ matrix.region }}
+      MARKET_INTEL_DEMO_MODE: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -21,6 +28,9 @@ jobs:
 
       - name: Verify API loads
         run: python -c "from src.api import app; print('API OK')"
+
+      - name: Run test suite
+        run: python -m pytest tests/ -q
 
   frontend:
     runs-on: ubuntu-latest
