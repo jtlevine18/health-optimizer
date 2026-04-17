@@ -1,0 +1,94 @@
+[
+  {
+    "id": "MZE-DRY",
+    "name": "Dry Maize",
+    "agmarknet_name": "Dry maize",
+    "kamis_product_id": 1,
+    "unit": "100kg",
+    "category": "cereal",
+    "perishability": "low",
+    "msp_2025_rs": null,
+    "base_price_rs": 8500,
+    "storage_rate_per_day": 3.0,
+    "spoilage_pct_per_day": 0.0012,
+    "harvest_windows": [
+      {"season": "long_rains", "months": [8, 9, 10]},
+      {"season": "short_rains", "months": [2, 3]}
+    ],
+    "seasonal_indices": {
+      "1": 1.10, "2": 1.13, "3": 1.03, "4": 1.02, "5": 0.88, "6": 0.94,
+      "7": 0.99, "8": 0.94, "9": 0.88, "10": 0.92, "11": 1.16, "12": 1.11
+    },
+    "post_harvest_loss": {"harvesting": 3.0, "threshing": 2.5, "transport": 1.5, "storage_per_month": 2.5},
+    "aliases": ["Dry maize", "Maize (Dry)", "White maize", "Mahindi"]
+  },
+  {
+    "id": "BEN-YGN",
+    "name": "Beans (Yellow-Green)",
+    "agmarknet_name": "Beans",
+    "kamis_product_id": 30,
+    "unit": "100kg",
+    "category": "pulse",
+    "perishability": "low",
+    "msp_2025_rs": null,
+    "base_price_rs": 13500,
+    "storage_rate_per_day": 3.5,
+    "spoilage_pct_per_day": 0.0010,
+    "harvest_windows": [
+      {"season": "long_rains", "months": [7, 8]},
+      {"season": "short_rains", "months": [1, 2]}
+    ],
+    "seasonal_indices": {
+      "1": 0.90, "2": 0.88, "3": 0.95, "4": 1.02, "5": 1.08, "6": 1.12,
+      "7": 0.92, "8": 0.88, "9": 0.95, "10": 1.05, "11": 1.10, "12": 1.15
+    },
+    "post_harvest_loss": {"harvesting": 2.5, "threshing": 2.0, "transport": 1.0, "storage_per_month": 2.0},
+    "aliases": ["Beans (yellow)", "Beans (green)", "Yellow beans", "Maharagwe"]
+  },
+  {
+    "id": "POT-RIR",
+    "name": "Red Irish Potato",
+    "agmarknet_name": "Potato",
+    "kamis_product_id": 57,
+    "unit": "100kg",
+    "category": "vegetable",
+    "perishability": "medium",
+    "msp_2025_rs": null,
+    "base_price_rs": 4500,
+    "storage_rate_per_day": 4.0,
+    "spoilage_pct_per_day": 0.0060,
+    "harvest_windows": [
+      {"season": "long_rains", "months": [7, 8, 9]},
+      {"season": "short_rains", "months": [1, 2]}
+    ],
+    "seasonal_indices": {
+      "1": 0.88, "2": 0.85, "3": 0.95, "4": 1.05, "5": 1.15, "6": 1.18,
+      "7": 0.95, "8": 0.85, "9": 0.90, "10": 1.00, "11": 1.10, "12": 1.14
+    },
+    "post_harvest_loss": {"harvesting": 3.5, "threshing": 0.0, "transport": 2.5, "storage_per_month": 6.0},
+    "aliases": ["Irish potato", "Potato", "Viazi"]
+  },
+  {
+    "id": "GRG-KEN",
+    "name": "Green Grams",
+    "agmarknet_name": "Green grams",
+    "kamis_product_id": 10,
+    "unit": "100kg",
+    "category": "pulse",
+    "perishability": "low",
+    "msp_2025_rs": null,
+    "base_price_rs": 16000,
+    "storage_rate_per_day": 3.5,
+    "spoilage_pct_per_day": 0.0008,
+    "harvest_windows": [
+      {"season": "long_rains", "months": [7, 8]},
+      {"season": "short_rains", "months": [12, 1]}
+    ],
+    "seasonal_indices": {
+      "1": 0.88, "2": 0.92, "3": 1.02, "4": 1.08, "5": 1.12, "6": 1.15,
+      "7": 0.92, "8": 0.88, "9": 0.95, "10": 1.05, "11": 1.10, "12": 0.90
+    },
+    "post_harvest_loss": {"harvesting": 2.5, "threshing": 1.5, "transport": 1.0, "storage_per_month": 1.5},
+    "aliases": ["Green gram", "Ndengu", "Mung bean"]
+  }
+]

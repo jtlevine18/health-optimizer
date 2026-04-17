@@ -3,9 +3,22 @@
 Covers the Aadhaar + Land Record + KCC services, the deterministic
 registry, DPIAgent composite, and the KCC-aware credit readiness
 integration. No DB, no API key, no network.
+
+Kenya has no equivalent DPI stack (Aadhaar/KCC are India-specific) so
+this whole module is India-only. Phase 1.6 will introduce parallel
+Kenya DPI tests if/when a Kenya DPI subsystem exists.
 """
 
 from __future__ import annotations
+
+import pytest
+
+from config import REGION
+
+pytestmark = pytest.mark.skipif(
+    REGION != "india",
+    reason="DPI subsystem is India-specific (Aadhaar/KCC); no Kenya equivalent yet",
+)
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.rag.knowledge_base import KNOWLEDGE_BASE, KnowledgeChunk
+from config import REGION
+
+if REGION == "kenya":
+    from src.rag.knowledge_base_kenya import KNOWLEDGE_BASE, KnowledgeChunk
+else:
+    from src.rag.knowledge_base import KNOWLEDGE_BASE, KnowledgeChunk
 
 log = logging.getLogger(__name__)
 

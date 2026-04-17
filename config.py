@@ -27,8 +27,16 @@ FEATURED_FARMERS, ...).
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
+
+
+# ── Region toggle ───────────────────────────────────────────────────────
+# Default Kenya per product decision (LastMileBench MI primary panel).
+# Set MARKET_INTEL_REGION=india to load the original Tamil Nadu data.
+
+REGION = os.getenv("MARKET_INTEL_REGION", "kenya")
 
 
 # ── Project root / JSON loader ──────────────────────────────────────────
@@ -41,11 +49,24 @@ def _load_json(name: str) -> list[dict]:
         return json.load(fh)
 
 
+# Per-region filenames. Kenya uses *_kenya.json; India (and anything else)
+# uses the original bare filenames so the existing Tamil Nadu pipeline is
+# byte-for-byte unchanged when REGION != "kenya".
+if REGION == "kenya":
+    _MARKETS_FILE = "markets_kenya.json"
+    _COMMODITIES_FILE = "commodities_kenya.json"
+    _FARMERS_FILE = "farmers_kenya.json"
+else:
+    _MARKETS_FILE = "markets.json"
+    _COMMODITIES_FILE = "commodities.json"
+    _FARMERS_FILE = "farmers.json"
+
+
 # ── Commodities ──────────────────────────────────────────────────────────
 # The raw dict shape is preserved so downstream code that indexes with
 # c["id"], c["name"], c["agmarknet_name"], c["category"], etc. keeps working.
 
-COMMODITIES: list[dict] = _load_json("commodities.json")
+COMMODITIES: list[dict] = _load_json(_COMMODITIES_FILE)
 COMMODITY_MAP: dict[str, dict] = {c["id"]: c for c in COMMODITIES}
 CATEGORIES = sorted({c["category"] for c in COMMODITIES})
 
@@ -97,7 +118,7 @@ class Mandi:
     reporting_quality: str  # "good", "moderate", "poor"
 
 
-_MARKETS_RAW = _load_json("markets.json")
+_MARKETS_RAW = _load_json(_MARKETS_FILE)
 
 MANDIS: list[Mandi] = [
     Mandi(
@@ -117,6 +138,10 @@ MANDIS: list[Mandi] = [
 ]
 
 MANDI_MAP: dict[str, Mandi] = {m.mandi_id: m for m in MANDIS}
+
+# Region-neutral alias: downstream code that isn't India-specific should
+# prefer MARKETS over MANDIS (the Indian term).
+MARKETS: list[Mandi] = MANDIS
 
 
 # ── API Endpoints ────────────────────────────────────────────────────────
@@ -154,12 +179,16 @@ class FarmerPersona:
     featured: bool = False  # Precomputed live in the weekly run for the demo UI
 
 
-# Curated, hand-written personas loaded from farmers.json. These drive the
-# screenshots, the tour narrative, and the featured demo cards. Every
-# curated persona is marked featured=True so they get precomputed
-# RECOMMEND calls every weekly pipeline run.
-_FARMERS_RAW = _load_json("farmers.json")
+# Curated, hand-written personas loaded from the region's farmers JSON.
+# India: 3 curated personas drive the demo UI; the other 97 are procedurally
+# generated to reach TARGET_FARMER_COUNT. Kenya: the JSON already contains
+# all 100 personas, so every entry is loaded and procedural generation
+# contributes zero additional farmers.
+_FARMERS_RAW = _load_json(_FARMERS_FILE)
 
+# Only the first 3 personas are marked featured=True (precomputed
+# RECOMMEND in the weekly pipeline). For India this covers the full
+# curated set; for Kenya it caps precomputed runs at 3 demo cards.
 _CURATED_FARMERS: list[FarmerPersona] = [
     FarmerPersona(
         farmer_id=f["farmer_id"],
@@ -171,9 +200,9 @@ _CURATED_FARMERS: list[FarmerPersona] = [
         quantity_quintals=float(f["quantity_quintals"]),
         has_storage=bool(f["has_storage"]),
         notes=f.get("notes", ""),
-        featured=True,
+        featured=(i < 3),
     )
-    for f in _FARMERS_RAW
+    for i, f in enumerate(_FARMERS_RAW)
 ]
 
 
@@ -259,3 +288,7 @@ SAMPLE_FARMERS: list[FarmerPersona] = (
 # Featured subset: only these farmers get precomputed RECOMMEND calls in the
 # weekly pipeline. The rest are available for on-demand computation.
 FEATURED_FARMERS: list[FarmerPersona] = [f for f in SAMPLE_FARMERS if f.featured]
+
+# Region-neutral alias: downstream code that isn't India-specific should
+# prefer FARMERS over SAMPLE_FARMERS.
+FARMERS: list[FarmerPersona] = SAMPLE_FARMERS

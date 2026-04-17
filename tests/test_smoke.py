@@ -18,6 +18,13 @@ from __future__ import annotations
 
 import pytest
 
+from config import REGION
+
+_india_only = pytest.mark.skipif(
+    REGION != "india",
+    reason="India-specific assertions (15 mandis, Tamil names, quintal range); Kenya parity tests in Phase 1.6",
+)
+
 
 # ---------------------------------------------------------------------------
 # Module imports
@@ -58,6 +65,7 @@ def test_imports_optimizer():
 # ---------------------------------------------------------------------------
 
 
+@_india_only
 def test_mandis_and_commodities_loaded():
     """15 Tamil Nadu mandis and 10 commodities are registered."""
     from config import COMMODITIES, MANDIS, MANDI_MAP
@@ -75,6 +83,7 @@ def test_pilot_registry_has_100_farmers():
     assert len(SAMPLE_FARMERS) == 100
 
 
+@_india_only
 def test_featured_subset_is_three_curated_farmers():
     """FEATURED_FARMERS is exactly the 3 hand-written personas."""
     from config import FEATURED_FARMERS, SAMPLE_FARMERS
@@ -108,6 +117,7 @@ def test_generated_farmers_use_mandi_commodities():
         )
 
 
+@_india_only
 def test_generated_farmers_have_plausible_quantities():
     """Generated quantities stay in the 8-35 quintal pilot range."""
     from config import SAMPLE_FARMERS

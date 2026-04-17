@@ -22,6 +22,7 @@ from config import (
     MANDIS,
     MANDI_MAP,
     PIPELINE_STEPS,
+    REGION,
     SAMPLE_FARMERS,
     FEATURED_FARMERS,
     SEASONAL_INDICES,
@@ -29,6 +30,7 @@ from config import (
 )
 from src.ingestion.agmarknet import fetch_mandi_prices, PriceRecord
 from src.ingestion.enam_scraper import fetch_enam_prices
+from src.ingestion.kamis import fetch_kamis_prices
 from src.ingestion.nasa_power import fetch_all_mandis_nasa_power, DailyReading
 from src.extraction.agent import ExtractionAgent, RuleBasedExtractor
 from src.reconciliation.agent import ReconciliationAgent, RuleBasedReconciler
@@ -226,6 +228,15 @@ class MarketIntelligencePipeline:
 
         try:
             async def _ingest_agmarknet():
+                # Under Kenya, the primary wholesale source is KAMIS (no eNAM).
+                if REGION == "kenya":
+                    try:
+                        self._agmarknet_prices = await fetch_kamis_prices(
+                            MANDIS, COMMODITIES, days_back=self.days_back,
+                        )
+                    except Exception as e:
+                        errors.append(f"KAMIS fetch failed: {e}")
+                    return
                 try:
                     self._agmarknet_prices = await fetch_mandi_prices(
                         MANDIS, COMMODITIES, days_back=self.days_back,
@@ -234,6 +245,9 @@ class MarketIntelligencePipeline:
                     errors.append(f"Agmarknet fetch failed: {e}")
 
             async def _ingest_enam():
+                if REGION == "kenya":
+                    self._enam_prices = {m.mandi_id: [] for m in MANDIS}
+                    return
                 try:
                     self._enam_prices = await fetch_enam_prices(
                         MANDIS, COMMODITIES, days_back=min(14, self.days_back),
