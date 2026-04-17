@@ -40,6 +40,7 @@ from config import (
     MANDIS,
     MANDI_MAP,
     PIPELINE_STEPS,
+    REGION,
     SEASONAL_INDICES,
     BASE_PRICES_RS,
     POST_HARVEST_LOSS,
@@ -810,12 +811,18 @@ def _generate_demo_data() -> dict:
                 f"Net Rs {best.get('net_price_rs', 0):,.0f}/quintal "
                 f"after transport Rs {best.get('transport_cost_rs', 0):,.0f} and fees."
             ) if best else "No mandis in range.",
-            "recommendation_tamil": (
+            # Demo endpoint only — the real pipeline overwrites these with
+            # Claude- or rule-based-recommender output and the right
+            # language code for the active region. The seeded Tamil
+            # string below is retained so the legacy India demo renders
+            # unchanged; Kenya demo runs overwrite it in the pipeline.
+            "recommendation_local": (
                 f"{farmer.name}: சிறந்த விருப்பம் {best.get('mandi_name', 'N/A')} "
                 f"({best.get('sell_timing', 'இப்போது')}). "
                 f"நிகர ₹{best.get('net_price_rs', 0):,.0f}/குவிண்டால் "
                 f"போக்குவரத்து ₹{best.get('transport_cost_rs', 0):,.0f} கழித்த பிறகு."
             ) if best else "சந்தைகள் எதுவும் இல்லை.",
+            "local_language_code": "ta",
             "credit_readiness": _demo_credit_readiness(farmer, best, options, potential_gain),
         })
 
@@ -1005,8 +1012,24 @@ def health():
         "status": "ok",
         "service": "market-intelligence-agent",
         "version": "1.0.0",
+        "region": REGION,
         "pipeline_data": store.has_real_data,
     }
+
+
+@app.get("/api/region")
+def get_region():
+    """Return the active region so the frontend can pick tour narrative,
+    currency, and page copy. Source of truth is `MARKET_INTEL_REGION` in
+    `config.py`. Called in dev (frontend proxies `/api/*` to localhost:7860)."""
+    return {"region": REGION}
+
+
+@app.get("/api/health")
+def api_health():
+    """Alias for `/health` under the `/api/*` prefix so callers that only know
+    the `/api/*` convention (Vercel routing, frontend proxy) can reach it."""
+    return health()
 
 
 @app.get("/api/mandis")

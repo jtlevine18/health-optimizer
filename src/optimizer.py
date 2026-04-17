@@ -621,5 +621,10 @@ def recommendation_to_dict(rec: SellRecommendation) -> dict:
         "recommendation_text": rec.recommendation_text,
         "farmer_id": "",
         "farmer_name": "",
-        "recommendation_tamil": "",
+        # Local-language translation + ISO 639-1 code. Populated by the
+        # RECOMMEND step (recommendation_agent) after this dict is built;
+        # this is just the default shape so downstream consumers see a
+        # stable key. "ta" = Tamil (India), "sw" = Swahili (Kenya).
+        "recommendation_local": "",
+        "local_language_code": "",
     }

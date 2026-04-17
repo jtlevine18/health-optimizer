@@ -1,9 +1,13 @@
 """
 Claude recommendation agent -- generates personalized sell recommendations
-in English and Tamil using RAG-augmented context.
+in English and a region-appropriate local language using RAG-augmented context.
 
 Acts as the farmer's broker: explains WHY a particular market/timing is
 optimal, what the risks are, and what the farmer should do.
+
+Region-aware: reads config.REGION and parameterizes all prompt text, the
+translation target language, currency, market-terminology, and the default
+SMS country code from REGION_CONFIG below.
 """
 
 from __future__ import annotations
@@ -14,20 +18,66 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-from config import COMMODITY_MAP, MANDI_MAP, SAMPLE_FARMERS, FarmerPersona, POST_HARVEST_LOSS
+from config import COMMODITY_MAP, MANDI_MAP, SAMPLE_FARMERS, FarmerPersona, POST_HARVEST_LOSS, REGION
 from src.geo import haversine_km
 
 log = logging.getLogger(__name__)
 
 
+# ── Region configuration ────────────────────────────────────────────────
+# Parameterizes the prompts and a few delivery constants per region.
+# Add a new region by adding a new entry (and updating downstream region
+# handling in db.py, the frontend, etc.).
+
+REGION_CONFIG: dict[str, dict[str, str]] = {
+    "india": {
+        "region_name": "Tamil Nadu",
+        "farmer_descriptor": "Tamil Nadu smallholder farmer",
+        "currency_name": "Indian Rupees",
+        "currency_symbol": "Rs",
+        "market_type": "mandi",
+        "local_language_name": "Tamil",
+        "local_language_code": "ta",
+        "local_greeting_example": "வணக்கம் Lakshmi...",
+        "typical_crops": "paddy, cotton, turmeric, groundnut",
+        "phone_country_code": "+91",
+    },
+    "kenya": {
+        "region_name": "Kenya",
+        "farmer_descriptor": "Kenyan smallholder farmer",
+        "currency_name": "Kenyan Shillings",
+        "currency_symbol": "KES",
+        "market_type": "market",
+        "local_language_name": "Swahili",
+        "local_language_code": "sw",
+        "local_greeting_example": "Habari Wanjiku...",
+        "typical_crops": "dry maize, beans, Irish potatoes, green grams",
+        "phone_country_code": "+254",
+    },
+}
+
+# Active config for the current process. REGION defaults to "kenya" in
+# config.py and may be overridden via MARKET_INTEL_REGION. Fall back to
+# the Kenya config if the name is unrecognized so we don't crash on import.
+_ACTIVE_REGION_CONFIG: dict[str, str] = REGION_CONFIG.get(REGION, REGION_CONFIG["kenya"])
+
+
 @dataclass
 class FarmerRecommendation:
-    """Complete recommendation for a farmer persona."""
+    """Complete recommendation for a farmer persona.
+
+    `recommendation_local` is the local-language translation of
+    `recommendation_en`. `local_language_code` (ISO 639-1) identifies which
+    language it is — "ta" for Tamil (India) or "sw" for Swahili (Kenya).
+    Frontend code should map the code to a display name rather than
+    hardcoding a specific language.
+    """
     farmer_id: str
     farmer_name: str
     commodity_id: str
     recommendation_en: str
-    recommendation_ta: str  # Tamil translation
+    recommendation_local: str  # Local-language translation (Tamil or Swahili)
+    local_language_code: str   # ISO 639-1: "ta" (Tamil) or "sw" (Swahili)
     sell_options_summary: list[dict]
     weather_outlook: str
     storage_analysis: str
@@ -114,23 +164,29 @@ TOOLS = [
     },
 ]
 
-SYSTEM_PROMPT = (
-    "You are an AI broker acting in the interest of Tamil Nadu smallholder farmers. "
+_SYSTEM_PROMPT_TEMPLATE = (
+    "You are an AI broker acting in the interest of {farmer_descriptor}s. "
     "Your job is to generate clear, actionable sell recommendations with specific "
-    "numbers -- not vague advice. Include:\n"
-    "1. WHERE to sell (which mandi, with distance and transport cost)\n"
+    "numbers -- not vague advice. Typical crops in {region_name} include "
+    "{typical_crops}. Include:\n"
+    "1. WHERE to sell (which {market_type}, with distance and transport cost)\n"
     "2. WHEN to sell (now vs wait, with price forecast)\n"
-    "3. HOW MUCH the farmer will actually receive (net of all costs)\n"
+    "3. HOW MUCH the farmer will actually receive "
+    "(net of all costs, in {currency_name} / {currency_symbol})\n"
     "4. RISK factors (weather, price volatility, storage loss)\n\n"
     "Be direct and practical. Farmers need concrete guidance, not caveats."
 )
 
-TRANSLATION_PROMPT = (
-    "Translate the following agricultural sell recommendation into Tamil. "
-    "Keep all numbers, mandi names, and Rs amounts as-is. Use simple, "
-    "conversational Tamil that a rural farmer would understand. "
-    "Do not add any preamble -- just output the Tamil text.\n\n"
+_TRANSLATION_PROMPT_TEMPLATE = (
+    "Translate the following agricultural sell recommendation into {local_language_name}. "
+    "Keep all numbers, {market_type} names, and {currency_symbol} amounts as-is. "
+    "Use simple, conversational {local_language_name} that a rural farmer would "
+    "understand (e.g. start naturally, like \"{local_greeting_example}\"). "
+    "Do not add any preamble -- just output the {local_language_name} text.\n\n"
 )
+
+SYSTEM_PROMPT = _SYSTEM_PROMPT_TEMPLATE.format(**_ACTIVE_REGION_CONFIG)
+TRANSLATION_PROMPT = _TRANSLATION_PROMPT_TEMPLATE.format(**_ACTIVE_REGION_CONFIG)
 
 
 # ── Tool execution (local logic) ────────────────────────────────────────
@@ -395,7 +451,8 @@ class RecommendationAgent:
 
         1. Claude calls tools to gather data (up to MAX_ROUNDS).
         2. Claude produces a final English recommendation.
-        3. A second Claude call translates to Tamil.
+        3. A second Claude call translates to the region's local language
+           (Tamil for India, Swahili for Kenya).
         """
         total_tokens = 0
         reasoning_trace: list[dict] = []
@@ -504,8 +561,10 @@ class RecommendationAgent:
 
             messages.append({"role": "user", "content": tool_results})
 
-        # ── Tamil translation (Haiku 4.5) ──────────────────────────────
-        recommendation_ta = ""
+        # ── Local-language translation (Haiku 4.5) ─────────────────────
+        local_language_name = _ACTIVE_REGION_CONFIG["local_language_name"]
+        local_language_code = _ACTIVE_REGION_CONFIG["local_language_code"]
+        recommendation_local = ""
         if recommendation_text:
             try:
                 translation_response = client.messages.create(
@@ -522,21 +581,24 @@ class RecommendationAgent:
 
                 for block in translation_response.content:
                     if block.type == "text":
-                        recommendation_ta += block.text
+                        recommendation_local += block.text
 
                 reasoning_trace.append({
                     "round": "translation",
                     "tool": "claude_translate",
-                    "input": {"target_language": "Tamil"},
-                    "result_summary": f"Tamil translation: {len(recommendation_ta)} chars",
+                    "input": {"target_language": local_language_name},
+                    "result_summary": (
+                        f"{local_language_name} translation: "
+                        f"{len(recommendation_local)} chars"
+                    ),
                 })
             except Exception as e:
-                log.warning("Tamil translation failed: %s", e)
-                recommendation_ta = "[Tamil translation unavailable]"
+                log.warning("%s translation failed: %s", local_language_name, e)
+                recommendation_local = f"[{local_language_name} translation unavailable]"
                 reasoning_trace.append({
                     "round": "translation",
                     "tool": "claude_translate",
-                    "input": {"target_language": "Tamil"},
+                    "input": {"target_language": local_language_name},
                     "result_summary": f"Translation failed: {e}",
                 })
 
@@ -557,7 +619,8 @@ class RecommendationAgent:
             farmer_name=farmer.name,
             commodity_id=farmer.primary_commodity,
             recommendation_en=recommendation_text,
-            recommendation_ta=recommendation_ta,
+            recommendation_local=recommendation_local,
+            local_language_code=local_language_code,
             sell_options_summary=sell_options_summary,
             weather_outlook=weather_outlook,
             storage_analysis=storage_analysis,
@@ -685,6 +748,14 @@ class RuleBasedRecommender:
         commodity = COMMODITY_MAP.get(farmer.primary_commodity, {})
         commodity_name = commodity.get("name", farmer.primary_commodity)
 
+        # Region-aware currency + market-type labels. The "best mandi"
+        # default label is kept when there's no mandi_name in the sell
+        # recommendation; replace it with the region's market_type so
+        # Kenya copy says "best market" rather than "best mandi".
+        currency_symbol = _ACTIVE_REGION_CONFIG["currency_symbol"]
+        market_type = _ACTIVE_REGION_CONFIG["market_type"]
+        default_market_label = f"best {market_type}"
+
         # ── Sell options ───────────────────────────────────────────────
         best = sell_recommendation.get("best_option", {})
         all_options = sell_recommendation.get("all_options", [])
@@ -717,29 +788,34 @@ class RuleBasedRecommender:
                 f"WHERE: Sell at {best['mandi_name']} "
                 f"({best.get('distance_km', 0):.0f} km away, "
                 f"~{best.get('distance_km', 0) / 30 * 60:.0f} min drive). "
-                f"Transport cost: Rs {best.get('transport_cost_rs', 0):,.0f}/quintal."
+                f"Transport cost: {currency_symbol} "
+                f"{best.get('transport_cost_rs', 0):,.0f}/quintal."
             )
 
         # WHEN section
         timing = best.get("sell_timing", "now")
         if timing == "now":
             sections.append(
-                f"WHEN: Sell NOW. Current market price at {best.get('mandi_name', 'best mandi')}: "
-                f"Rs {best.get('market_price_rs', 0):,.0f}/quintal."
+                f"WHEN: Sell NOW. Current market price at "
+                f"{best.get('mandi_name', default_market_label)}: "
+                f"{currency_symbol} {best.get('market_price_rs', 0):,.0f}/quintal."
             )
         else:
             sections.append(
-                f"WHEN: WAIT {timing}. Forecasted price at {best.get('mandi_name', 'best mandi')}: "
-                f"Rs {best.get('market_price_rs', 0):,.0f}/quintal. "
-                f"Storage loss while waiting: Rs {best.get('storage_loss_rs', 0):,.0f}/quintal."
+                f"WHEN: WAIT {timing}. Forecasted price at "
+                f"{best.get('mandi_name', default_market_label)}: "
+                f"{currency_symbol} {best.get('market_price_rs', 0):,.0f}/quintal. "
+                f"Storage loss while waiting: {currency_symbol} "
+                f"{best.get('storage_loss_rs', 0):,.0f}/quintal."
             )
 
         # HOW MUCH section
         net_total = best.get("net_price_rs", 0) * farmer.quantity_quintals
         sections.append(
-            f"HOW MUCH: Net price after all costs: Rs {best.get('net_price_rs', 0):,.0f}/quintal. "
+            f"HOW MUCH: Net price after all costs: {currency_symbol} "
+            f"{best.get('net_price_rs', 0):,.0f}/quintal. "
             f"For {farmer.quantity_quintals:.0f} quintals of {commodity_name}: "
-            f"Rs {net_total:,.0f} total."
+            f"{currency_symbol} {net_total:,.0f} total."
         )
 
         # RISK section
@@ -779,8 +855,9 @@ class RuleBasedRecommender:
         potential_gain = sell_recommendation.get("potential_gain_rs", 0)
         if potential_gain > 0:
             sections.append(
-                f"GAIN: By following this plan instead of selling at the nearest mandi now, "
-                f"you gain Rs {potential_gain:,.0f} on {farmer.quantity_quintals:.0f} quintals."
+                f"GAIN: By following this plan instead of selling at the nearest "
+                f"{market_type} now, you gain {currency_symbol} {potential_gain:,.0f} "
+                f"on {farmer.quantity_quintals:.0f} quintals."
             )
 
         recommendation_en = "\n\n".join(sections)
@@ -817,12 +894,16 @@ class RuleBasedRecommender:
             },
         ]
 
+        local_language_name = _ACTIVE_REGION_CONFIG["local_language_name"]
+        local_language_code = _ACTIVE_REGION_CONFIG["local_language_code"]
+
         return FarmerRecommendation(
             farmer_id=farmer.farmer_id,
             farmer_name=farmer.name,
             commodity_id=farmer.primary_commodity,
             recommendation_en=recommendation_en,
-            recommendation_ta="[Tamil translation pending]",
+            recommendation_local=f"[{local_language_name} translation pending]",
+            local_language_code=local_language_code,
             sell_options_summary=options_summary,
             weather_outlook=weather_summary,
             storage_analysis=json.dumps(storage_projections, indent=2),

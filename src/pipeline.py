@@ -718,6 +718,17 @@ class MarketIntelligencePipeline:
                     )
                     self._farmer_recommendations.append(rec)
                     self._recommendation_tokens += rec.tokens_used
+
+                    # Merge the English + local-language recommendation text
+                    # back into the sell_recommendations dict so the delivery
+                    # step (and downstream consumers like the Vercel API)
+                    # can read both from a single record.
+                    if sell_rec:
+                        sell_rec["recommendation_text"] = (
+                            rec.recommendation_en or sell_rec.get("recommendation_text", "")
+                        )
+                        sell_rec["recommendation_local"] = rec.recommendation_local
+                        sell_rec["local_language_code"] = rec.local_language_code
                 except Exception as exc:
                     errors.append(f"Recommendation for {farmer.name} failed: {exc}")
 
@@ -760,13 +771,19 @@ class MarketIntelligencePipeline:
                     errors=["No sell recommendations to deliver"],
                 )
 
-            # Build farmer dicts for the delivery module
+            # Build farmer dicts for the delivery module. Default phone
+            # prefix + language come from the active region (see
+            # REGION_CONFIG in src.recommendation_agent) so Kenya runs
+            # don't leak India placeholders.
+            from src.recommendation_agent import _ACTIVE_REGION_CONFIG
+            region_phone_default = f"{_ACTIVE_REGION_CONFIG['phone_country_code']}0000000000"
+            region_lang_default = _ACTIVE_REGION_CONFIG["local_language_code"]
             farmers = [
                 {
                     "farmer_id": f.farmer_id,
                     "name": f.name,
-                    "phone": getattr(f, "phone", "+910000000000"),
-                    "language": getattr(f, "language", "ta"),
+                    "phone": getattr(f, "phone", region_phone_default),
+                    "language": getattr(f, "language", region_lang_default),
                 }
                 for f in SAMPLE_FARMERS
             ]

@@ -272,6 +272,17 @@ def save_pipeline_run(run_result: dict) -> bool:
                     ))
 
         # Save sell recommendations (with full data blob)
+        #
+        # Phase 1.4 DB-schema gap: the Python dict carries new fields
+        # `recommendation_local` and `local_language_code` (Kenya migration,
+        # Option A rename). Those live inside the `full_data` JSONB blob
+        # here — the SellRecommendation ORM model intentionally has NO
+        # dedicated columns for them so this rename required zero SQL
+        # migration. If a future phase wants indexable columns for
+        # language-aware queries, add them here and backfill from
+        # full_data->>'local_language_code'. Intentional scope gap for
+        # Phase 1.4; follow-up tracked in the LastMileBench Kenya pivot
+        # notes.
         for rec in run_result.get("sell_recommendations", []):
             best = rec.get("best_option", {})
             session.add(SellRecommendation(
