@@ -9,7 +9,8 @@ import {
   useDeliveryLogs,
   type SellRecommendation,
 } from '../lib/api'
-import { formatRs } from '../lib/format'
+import { formatPrice } from '../lib/format'
+import { useRegion, useRegionCopy, LANGUAGE_NAMES } from '../lib/region'
 
 function netPriceColor(net: number, best: number): string {
   if (net >= best * 0.95) return '#4a7c59'
@@ -21,6 +22,8 @@ export default function SellOptimizer() {
   const recommendations = useSellRecommendations()
   const mandis = useMandis()
   const deliveryLogs = useDeliveryLogs()
+  const region = useRegion()
+  const regionCopy = useRegionCopy()
   const [selectedFarmer, setSelectedFarmer] = useState<number>(0)
   const [expandedReasoning, setExpandedReasoning] = useState<number | null>(null)
   const [farmerTab, setFarmerTab] = useState<'sell' | 'credit'>('sell')
@@ -91,8 +94,8 @@ export default function SellOptimizer() {
         <MetricCard label="Farmers analyzed" value={metrics.farmers} subtitle="sample recommendations" />
         <MetricCard
           label="Best potential gain"
-          value={formatRs(metrics.bestGain)}
-          subtitle="per quintal vs nearest"
+          value={formatPrice(metrics.bestGain, region)}
+          subtitle={`per ${regionCopy.priceUnit} vs nearest`}
         />
         <MetricCard
           label="Avg net improvement"
@@ -160,7 +163,7 @@ export default function SellOptimizer() {
                     margin: '4px 0 20px 0',
                   }}
                 >
-                  {rec.commodity_name} &middot; {rec.quantity_quintals} quintals
+                  {rec.commodity_name} &middot; {rec.quantity_quintals} {regionCopy.quantityNoun}
                 </p>
 
                 <div
@@ -183,7 +186,7 @@ export default function SellOptimizer() {
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#8d909e' }}>Net price</span>
                     <span style={{ color: '#446b26', fontVariantNumeric: 'tabular-nums' }}>
-                      {formatRs(rec.best_option.net_price_rs)}/q
+                      {formatPrice(rec.best_option.net_price_rs, region)}{regionCopy.priceUnitShort}
                     </span>
                   </div>
                 </div>
@@ -197,7 +200,7 @@ export default function SellOptimizer() {
                       marginBottom: 0,
                     }}
                   >
-                    +{formatRs(gainVsNearest)}/q &middot; +{gainPct}% vs nearest market
+                    +{formatPrice(gainVsNearest, region)}{regionCopy.priceUnitShort} &middot; +{gainPct}% vs nearest market
                   </p>
                 )}
 
@@ -244,21 +247,34 @@ export default function SellOptimizer() {
                     >
                       {rec.recommendation_text}
                     </p>
-                    {rec.recommendation_tamil && (
-                      <p
-                        style={{
-                          fontFamily:
-                            '"Source Serif 4", "Noto Serif Tamil", Georgia, serif',
-                          fontSize: '13px',
-                          lineHeight: 1.7,
-                          color: '#606373',
-                          margin: 0,
-                          fontStyle: 'italic',
-                        }}
-                      >
-                        {rec.recommendation_tamil}
-                      </p>
-                    )}
+                    {(() => {
+                      // Phase 1.4 rename: `recommendation_local` is the
+                      // canonical field; `local_language_code` (ISO 639-1)
+                      // selects the font + display label via LANGUAGE_NAMES.
+                      const local = rec.recommendation_local || ''
+                      const code = rec.local_language_code || ''
+                      const name = LANGUAGE_NAMES[code] ?? ''
+                      if (!local) return null
+                      const fontFamily =
+                        code === 'ta'
+                          ? '"Source Serif 4", "Noto Serif Tamil", Georgia, serif'
+                          : '"Source Serif 4", Georgia, serif'
+                      return (
+                        <p
+                          style={{
+                            fontFamily,
+                            fontSize: '13px',
+                            lineHeight: 1.7,
+                            color: '#606373',
+                            margin: 0,
+                            fontStyle: 'italic',
+                          }}
+                          aria-label={name ? `${name} translation` : 'Local translation'}
+                        >
+                          {local}
+                        </p>
+                      )
+                    })()}
                   </div>
                 )}
               </button>
@@ -366,7 +382,7 @@ export default function SellOptimizer() {
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                                   <span style={{ color: '#8d909e' }}>Market</span>
-                                  <span>{formatRs(opt.market_price_rs)}</span>
+                                  <span>{formatPrice(opt.market_price_rs, region)}</span>
                                 </div>
                                 <div
                                   style={{
@@ -379,7 +395,7 @@ export default function SellOptimizer() {
                                 >
                                   <span>Net</span>
                                   <span style={{ color: '#446b26' }}>
-                                    {formatRs(opt.net_price_rs)}/q
+                                    {formatPrice(opt.net_price_rs, region)}{regionCopy.priceUnitShort}
                                   </span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
@@ -419,7 +435,7 @@ export default function SellOptimizer() {
                             {activeFarmer.farmer_name}
                           </div>
                           <div style={{ fontSize: '12px', color: '#8d909e', marginTop: '2px' }}>
-                            {activeFarmer.commodity_name} &middot; {activeFarmer.quantity_quintals} quintals
+                            {activeFarmer.commodity_name} &middot; {activeFarmer.quantity_quintals} {regionCopy.quantityNoun}
                           </div>
                         </div>
                       </Popup>
@@ -462,15 +478,15 @@ export default function SellOptimizer() {
                             </td>
                             <td style={{ fontWeight: 500 }}>{opt.mandi_name}</td>
                             <td>{opt.sell_timing}</td>
-                            <td className="num">{formatRs(opt.market_price_rs)}</td>
+                            <td className="num">{formatPrice(opt.market_price_rs, region)}</td>
                             <td className="num" style={{ color: '#c71f48' }}>
-                              −{formatRs(opt.transport_cost_rs)}
+                              −{formatPrice(opt.transport_cost_rs, region)}
                             </td>
                             <td className="num" style={{ color: '#c71f48' }}>
-                              −{formatRs(opt.storage_loss_rs)}
+                              −{formatPrice(opt.storage_loss_rs, region)}
                             </td>
                             <td className="num" style={{ color: '#c71f48' }}>
-                              −{formatRs(opt.mandi_fee_rs)}
+                              −{formatPrice(opt.mandi_fee_rs, region)}
                             </td>
                             <td
                               className="num"
@@ -479,7 +495,7 @@ export default function SellOptimizer() {
                                 fontWeight: 600,
                               }}
                             >
-                              {formatRs(opt.net_price_rs)}
+                              {formatPrice(opt.net_price_rs, region)}
                             </td>
                             <td className="num" style={{ color: '#8d909e' }}>
                               {opt.distance_km.toFixed(0)} km
@@ -554,7 +570,7 @@ export default function SellOptimizer() {
                                   }}
                                 >
                                   {r.sign}
-                                  {formatRs(Math.abs(r.value))}
+                                  {formatPrice(Math.abs(r.value), region)}
                                 </td>
                               </tr>
                             ))}
@@ -576,7 +592,7 @@ export default function SellOptimizer() {
                                   color: '#446b26',
                                 }}
                               >
-                                {formatRs(net)}/q
+                                {formatPrice(net, region)}{regionCopy.priceUnitShort}
                               </td>
                             </tr>
                           </tbody>
@@ -589,7 +605,7 @@ export default function SellOptimizer() {
                             marginTop: '12px',
                           }}
                         >
-                          Deductions total {formatRs(totalDeductions)} &middot;{' '}
+                          Deductions total {formatPrice(totalDeductions, region)} &middot;{' '}
                           {marketPrice > 0 ? ((totalDeductions / marketPrice) * 100).toFixed(1) : '0'}% of
                           market price.
                         </p>
@@ -671,7 +687,7 @@ export default function SellOptimizer() {
                         <div style={{ textAlign: 'right' }}>
                           <div className="eyebrow">Expected revenue</div>
                           <p className="metric-number" style={{ marginTop: '4px' }}>
-                            {formatRs(cr.expected_revenue_rs)}
+                            {formatPrice(cr.expected_revenue_rs, region)}
                           </p>
                           <div className="eyebrow" style={{ marginTop: '14px' }}>
                             Max advisable loan
@@ -684,7 +700,7 @@ export default function SellOptimizer() {
                               marginTop: '4px',
                             }}
                           >
-                            {formatRs(cr.max_advisable_input_loan_rs)}
+                            {formatPrice(cr.max_advisable_input_loan_rs, region)}
                           </p>
                         </div>
                         {(cr.strengths.length > 0 || cr.risks.length > 0) && (

@@ -1,6 +1,9 @@
 import type { Step } from 'react-joyride'
+import type { Region } from './region'
 
-export const tourSteps: Step[] = [
+// ── India tour (Lakshmi, Thanjavur rice) ────────────────────────────────────
+
+const INDIA_TOUR: Step[] = [
   // ── Step 1: Welcome (/) ──
   {
     target: '[data-tour="hero"]',
@@ -39,7 +42,7 @@ export const tourSteps: Step[] = [
     target: '[data-tour="forecast-metrics"]',
     title: 'The confidence band matters',
     content:
-      '\u20b92,300 \u00b1 \u20b9150 is a strong signal. \u20b92,300 \u00b1 \u20b9500 means wait for more data. ' +
+      'Rs 2,300 \u00b1 Rs 150 is a strong signal. Rs 2,300 \u00b1 Rs 500 means wait for more data. ' +
       'The wider the band, the less certain the forecast \u2014 ' +
       'and the more reason to hold off on a sell decision.',
     placement: 'bottom',
@@ -50,8 +53,8 @@ export const tourSteps: Step[] = [
     target: '[data-tour="sell-title"]',
     title: 'The full calculation',
     content:
-      'Kumbakonam pays \u20b9150/quintal more than Thanjavur \u2014 but it\u2019s 30 km away, and transport costs \u20b980. ' +
-      'Storing at Thanjavur for two weeks loses another \u20b945 to spoilage. ' +
+      'Kumbakonam pays Rs 150/quintal more than Thanjavur \u2014 but it\u2019s 30 km away, and transport costs Rs 80. ' +
+      'Storing at Thanjavur for two weeks loses another Rs 45 to spoilage. ' +
       'The advisor works out every combination and finds the one that puts the most money in Lakshmi\u2019s pocket.',
     placement: 'bottom',
     disableBeacon: true,
@@ -81,13 +84,116 @@ export const tourSteps: Step[] = [
     target: '[data-tour="nav-pipeline"]',
     title: 'How it all fits together',
     content:
-      'The full chain — from scraping two government databases to generating a personalized ' +
+      'The full chain \u2014 from scraping two government databases to generating a personalized ' +
       'sell recommendation in Tamil. The system is designed to be forked ' +
       'for a different region, set of crops, or market network.',
     placement: 'right',
     disableBeacon: true,
   },
 ]
+
+// ── Kenya tour (Wanjiku, Kisumu dry maize) ──────────────────────────────────
+
+const KENYA_TOUR: Step[] = [
+  // ── Step 1: Welcome (/) ──
+  {
+    target: '[data-tour="hero"]',
+    title: 'Wanjiku grows dry maize in Kisumu County',
+    content:
+      'She harvests in August with 15 bags of maize. Three markets within 40km, each quoting a different price. ' +
+      'She sells at the nearest one for whatever the broker offers \u2014 and loses 15\u201330% of what her maize is actually worth. ' +
+      'An AI agent acts as her broker: it tells her which market, which day, and the net price per bag after transport and fees.',
+    placement: 'bottom',
+    disableBeacon: true,
+  },
+  // ── Step 2: Live data (/) ──
+  {
+    target: '[data-tour="metrics"]',
+    title: '10 real markets. 4 commodities. Refreshed every week.',
+    content:
+      'These are real county and sub-county markets from Kisumu to Nakuru, with prices from the KAMIS daily wholesale feed. ' +
+      'The \u2018Conflicts\u2019 count shows how many prices KAMIS and the secondary source disagreed on \u2014 ' +
+      'each one is a case where Wanjiku wouldn\u2019t know which number to trust.',
+    placement: 'top',
+    disableBeacon: true,
+  },
+  // ── Step 3: Navigate to Forecast (/forecast) ──
+  {
+    target: '[data-tour="forecast-title"]',
+    title: 'Should she sell now or wait two weeks?',
+    content:
+      'The system predicts prices at 7, 14, and 30 days \u2014 ' +
+      'with honest confidence ranges so farmers know how much to trust each forecast. ' +
+      'Maize typically drops 15% in September as the long-rains harvest floods the market, then climbs through January.',
+    placement: 'bottom',
+    disableBeacon: true,
+  },
+  // ── Step 5: Forecast confidence (/forecast) ──
+  {
+    target: '[data-tour="forecast-metrics"]',
+    title: 'The confidence band matters',
+    content:
+      'KES 4,200 \u00b1 KES 200 is a strong signal. KES 4,200 \u00b1 KES 700 means wait for more data. ' +
+      'The wider the band, the less certain the forecast \u2014 ' +
+      'and the more reason to hold off on a sell decision.',
+    placement: 'bottom',
+    disableBeacon: true,
+  },
+  // ── Step 6: Navigate to Sell (/sell) ──
+  {
+    target: '[data-tour="sell-title"]',
+    title: 'The full calculation',
+    content:
+      'Nakuru pays KES 250 per bag more than Kisumu \u2014 but it\u2019s 160 km away, and transport costs KES 180. ' +
+      'Storing at Kisumu for two weeks loses another KES 120 to weevil and moisture. ' +
+      'The advisor works out every combination and finds the one that puts the most money in Wanjiku\u2019s pocket.',
+    placement: 'bottom',
+    disableBeacon: true,
+  },
+  // ── Step 7: Net price breakdown (/sell) ──
+  {
+    target: '[data-tour="waterfall"]',
+    title: 'Net price, not market price',
+    content:
+      'Market price minus transport, minus storage loss, minus market fees equals net price. ' +
+      'That\u2019s the number that matters. The broker knows this math. Now Wanjiku does too.',
+    placement: 'top',
+    disableBeacon: true,
+  },
+  // ── Step 8: Credit readiness (/sell) ──
+  {
+    target: '[data-tour="credit-readiness"]',
+    title: 'Should she borrow for next season?',
+    content:
+      'Based on her expected harvest revenue, the agent gives her honest advice on whether an input loan makes sense \u2014 ' +
+      'and caps it at 40% of expected revenue. Green means strong. Amber means proceed with caution. Red means wait.',
+    placement: 'top',
+    disableBeacon: true,
+  },
+  // ── Step 9: End on Pipeline ──
+  {
+    target: '[data-tour="nav-pipeline"]',
+    title: 'How it all fits together',
+    content:
+      'The full chain \u2014 from scraping public market databases to generating a personalized ' +
+      'sell recommendation in Kiswahili. The system is designed to be forked ' +
+      'for a different region, set of crops, or market network.',
+    placement: 'right',
+    disableBeacon: true,
+  },
+]
+
+// Exported selector. Pages/App.tsx call `tourStepsForRegion(region)` so the
+// whole 9-step array swaps out in one place. Step count is identical across
+// regions so `stepRoutes` (indexed by step number, not region) still applies.
+export function tourStepsForRegion(region: Region): Step[] {
+  return region === 'india' ? INDIA_TOUR : KENYA_TOUR
+}
+
+// Both tour variants have the same step count; exported so components like
+// TourTooltip ("Step 3 of 9") can reference it without receiving the whole
+// step list as a prop.
+export const TOUR_STEP_COUNT = KENYA_TOUR.length
 
 export const stepRoutes: Record<number, string> = {
   0: '/',         // hero

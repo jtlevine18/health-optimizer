@@ -1,5 +1,5 @@
 import type { TooltipRenderProps } from 'react-joyride'
-import { tourStyles, tourSteps } from '../lib/tour'
+import { tourStyles, TOUR_STEP_COUNT } from '../lib/tour'
 
 export default function TourTooltip({
   continuous,
@@ -38,7 +38,7 @@ export default function TourTooltip({
           marginTop: 12,
         }}
       >
-        Step {index + 1} of {tourSteps.length}
+        Step {index + 1} of {TOUR_STEP_COUNT}
       </div>
 
       {/* Buttons */}

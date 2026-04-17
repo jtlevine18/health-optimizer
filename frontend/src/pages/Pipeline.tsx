@@ -2,6 +2,7 @@ import { useState } from 'react'
 import StatusBadge from '../components/StatusBadge'
 import { LoadingSpinner, ErrorState } from '../components/LoadingState'
 import { usePipelineStats, usePipelineRuns } from '../lib/api'
+import { useRegion, useRegionCopy } from '../lib/region'
 
 const REBUILD_PROMPT = `I forked https://github.com/jtlevine18/market-intelligence — an AI crop pricing agent for smallholder farmers. I want to adapt it for my region. Read CLAUDE.md to understand the full architecture, then make all the changes below.
 
@@ -82,26 +83,41 @@ If it fails, debug and fix. Common issues: missing DATABASE_URL, missing API key
 
 These are globally portable: src/pipeline.py, src/forecasting/price_model.py, src/forecasting/chronos_model.py, src/optimizer.py, src/rag/provider.py, src/store.py, src/ingestion/nasa_power.py, src/ingestion/base.py, all frontend pages, src/lib/api.ts`
 
-const STACK = [
-  {
-    label: 'Data',
-    items: ['Agmarknet (data.gov.in)', 'eNAM', '15 regulated markets'],
-  },
-  {
-    label: 'Models',
-    items: ['Chronos-2 — Amazon\'s open time-series foundation model for forecasting', 'Claude Sonnet — reasoning agent that investigates price conflicts', 'Claude Haiku — writes sell advice in English and Tamil'],
-  },
-  {
-    label: 'Delivery',
-    items: ['Twilio SMS', 'Weekly, per-farmer', 'Tamil + English'],
-  },
-  {
-    label: 'Infrastructure',
-    items: ['Postgres on Neon', 'Hugging Face Spaces', 'GitHub Actions cron', 'Vercel frontend'],
-  },
-]
+// Region-aware stack entries. Data source names, market counts, and the local
+// language listed under "Delivery" all need to reflect the active region.
+function buildStack(region: 'india' | 'kenya') {
+  const isKenya = region === 'kenya'
+  const primarySource = isKenya ? 'KAMIS (daily wholesale)' : 'Agmarknet (data.gov.in)'
+  const secondarySource = isKenya ? 'Secondary county source' : 'eNAM'
+  const marketsLine = isKenya ? '10 county markets' : '15 regulated markets'
+  const localLanguage = isKenya ? 'Kiswahili' : 'Tamil'
+  return [
+    {
+      label: 'Data',
+      items: [primarySource, secondarySource, marketsLine],
+    },
+    {
+      label: 'Models',
+      items: [
+        "Chronos-2 — Amazon's open time-series foundation model for forecasting",
+        'Claude Sonnet — reasoning agent that investigates price conflicts',
+        `Claude Haiku — writes sell advice in English and ${localLanguage}`,
+      ],
+    },
+    {
+      label: 'Delivery',
+      items: ['Twilio SMS', 'Weekly, per-farmer', `${localLanguage} + English`],
+    },
+    {
+      label: 'Infrastructure',
+      items: ['Postgres on Neon', 'Hugging Face Spaces', 'GitHub Actions cron', 'Vercel frontend'],
+    },
+  ]
+}
 
 function HowItWorksSection() {
+  const region = useRegion()
+  const stack = buildStack(region)
   return (
     <div style={{ marginBottom: '24px' }}>
       <div
@@ -113,7 +129,7 @@ function HowItWorksSection() {
           paddingTop: '18px',
         }}
       >
-        {STACK.map((cat) => (
+        {stack.map((cat) => (
           <div key={cat.label}>
             <div className="eyebrow">{cat.label}</div>
             <ul
@@ -143,9 +159,13 @@ function HowItWorksSection() {
 export default function Pipeline() {
   const stats = usePipelineStats()
   const runs = usePipelineRuns()
+  const region = useRegion()
+  const regionCopy = useRegionCopy()
   const [expandedRun, setExpandedRun] = useState<string | null>(null)
   const [tab, setTab] = useState<'runs' | 'cost' | 'build'>('runs')
-  const [marketCount, setMarketCount] = useState(15)
+  // Initial market count matches the region's deployed count (15 TN mandis vs
+  // 10 Kenyan county markets) so the calculator starts with a realistic seed.
+  const [marketCount, setMarketCount] = useState(region === 'kenya' ? 10 : 15)
   const [runsPerWeek, setRunsPerWeek] = useState(1)
   const [claudeModel, setClaudeModel] = useState<'sonnet' | 'haiku'>('sonnet')
   const [copied, setCopied] = useState(false)
@@ -341,19 +361,26 @@ export default function Pipeline() {
                   label: 'Current (live)',
                   cost: '~$0.16 / week',
                   note:
-                    'Fifteen markets scraped and reconciled. Three featured farmers get precomputed sell advice. Extract and reconcile run once per market, shared across all farmers.',
+                    region === 'kenya'
+                      ? 'Ten county markets scraped and reconciled. Three featured farmers get precomputed sell advice. Extract and reconcile run once per market, shared across all farmers.'
+                      : 'Fifteen markets scraped and reconciled. Three featured farmers get precomputed sell advice. Extract and reconcile run once per market, shared across all farmers.',
                 },
                 {
                   label: 'Pilot (100 farmers)',
                   cost: '~$1.50 / week',
                   note:
-                    'One cooperative. Every farmer gets a personalized recommendation every weekly run. Haiku handles Tamil translation, Sonnet handles reasoning.',
+                    `One cooperative. Every farmer gets a personalized recommendation every weekly run. Haiku handles ${regionCopy.languageName} translation, Sonnet handles reasoning.`,
                 },
                 {
-                  label: 'State-wide (10k farmers)',
+                  label:
+                    region === 'kenya'
+                      ? 'County-wide (10k farmers)'
+                      : 'State-wide (10k farmers)',
                   cost: '~$30 / week',
                   note:
-                    'Tamil Nadu block extension network. A hundred times the farmers but roughly twenty times the cost, because scraping and forecasting stay fixed.',
+                    region === 'kenya'
+                      ? 'County extension network across Kenya. A hundred times the farmers but roughly twenty times the cost, because scraping and forecasting stay fixed.'
+                      : 'Tamil Nadu block extension network. A hundred times the farmers but roughly twenty times the cost, because scraping and forecasting stay fixed.',
                 },
               ].map((tier) => (
                 <div key={tier.label}>

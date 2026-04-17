@@ -154,6 +154,8 @@ export interface SellRecommendation {
   farmer_name: string
   commodity_id: string
   commodity_name: string
+  // Python layer emits a `quantity_quintals` key regardless of region; under
+  // Kenya the value is bags. Pages use `RegionCopy.quantityNoun` for the label.
   quantity_quintals: number
   farmer_lat: number
   farmer_lon: number
@@ -161,7 +163,13 @@ export interface SellRecommendation {
   all_options: SellOption[]
   potential_gain_rs: number
   recommendation_text: string
-  recommendation_tamil: string
+  // Phase 1.4 rename: the broker agent emits `recommendation_local` as the
+  // local-language translation, paired with `local_language_code` (ISO 639-1,
+  // "ta" for Tamil / India, "sw" for Swahili / Kenya). Use
+  // `LANGUAGE_NAMES[code]` from lib/region.ts to render a display name
+  // rather than hardcoding the language.
+  recommendation_local?: string
+  local_language_code?: string
   // Backend explicitly returns `null` (not undefined) from the fallback path.
   credit_readiness?: CreditReadiness | null
 }
@@ -317,6 +325,26 @@ export interface PipelineStats {
 // ── Query hooks ──────────────────────────────────────────────────────────────
 
 const STALE_5MIN = 5 * 60 * 1000
+
+// ── Health / region endpoint ────────────────────────────────────────────────
+
+export interface HealthResponse {
+  status: string
+  // Present when backend exposes region (added in Phase 1.5 — both the Vercel
+  // `/api/health` and the HF Space `/health` emit it).
+  region?: 'kenya' | 'india'
+  pipeline_data?: boolean
+  source?: string
+  error?: string
+}
+
+export function useHealth() {
+  return useQuery<HealthResponse>({
+    queryKey: ['health'],
+    queryFn: () => fetchJson<HealthResponse>('/api/health'),
+    staleTime: STALE_5MIN,
+  })
+}
 
 export function useMandis() {
   return useQuery<MandisResponse>({

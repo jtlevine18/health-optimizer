@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import MetricCard from '../components/MetricCard'
 import { DashboardSkeleton, ErrorState } from '../components/LoadingState'
@@ -10,51 +10,101 @@ import {
   useSellRecommendations,
   useDeliveryLogs,
 } from '../lib/api'
-import { formatRs } from '../lib/format'
+import { formatPrice } from '../lib/format'
+import { useRegion, useRegionCopy, LANGUAGE_NAMES } from '../lib/region'
+
+// ── Region-dependent hero copy ──────────────────────────────────────────────
+//
+// Each entry picks the variant keyed on the active region. The structure of
+// HERO_STEPS is identical across regions (5 steps, same `outputType` flow),
+// only the body copy and short line change so the pipeline narrative reads
+// natively. Keeping both variants in a single map means one place to edit
+// when marketing copy is tweaked.
+type HeroCopy = { short: string; body: string }
+type HeroLocalized = Record<'india' | 'kenya', HeroCopy>
+
+const HERO_COPY: Record<string, HeroLocalized> = {
+  collect: {
+    india: {
+      short: 'Weekly prices from two government databases',
+      body: "Real arrival prices — paddy, turmeric, cotton, onion, banana — pulled from Agmarknet and eNAM, two free public government databases. Fifteen regulated markets across Tamil Nadu, refreshed every week. This is ground truth that buyers already have and farmers don't.",
+    },
+    kenya: {
+      short: 'Weekly prices from public market databases',
+      body: "Real wholesale prices — maize, beans, sorghum, rice — pulled from KAMIS daily and a secondary county source. Ten county and sub-county markets across Kenya, refreshed every week. This is ground truth that buyers already have and smallholder farmers don't.",
+    },
+  },
+  reconcile: {
+    india: {
+      short: 'Agent investigates when the two sources disagree',
+      body: "The two databases disagree on the same market's price five to twelve percent of the time. When they do, an agent investigates — checking neighboring markets, seasonal norms, arrival volumes, and transport-arbitrage costs — and produces a single reconciled price with its reasoning logged. Farmers never see the disagreement; they just see the answer.",
+    },
+    kenya: {
+      short: 'Agent investigates when the two sources disagree',
+      body: "The public sources disagree on the same market's price five to twelve percent of the time. When they do, an agent investigates — checking neighboring markets, seasonal norms, arrival volumes, and transport-arbitrage costs — and produces a single reconciled price with its reasoning logged. Farmers never see the disagreement; they just see the answer.",
+    },
+  },
+  forecast: {
+    india: {
+      short: 'Probabilistic forecasts out to thirty days',
+      body: "Chronos-2 — Amazon's open time-series foundation model — produces probabilistic forecasts for every commodity at every market, out to thirty days. Each market's historical bias is learned from five years of arrival data and corrected for, the same way a weather pipeline corrects against station history.",
+    },
+    kenya: {
+      short: 'Probabilistic forecasts out to thirty days',
+      body: "Chronos-2 — Amazon's open time-series foundation model — produces probabilistic forecasts for every commodity at every market, out to thirty days. Each market's historical bias is learned from five years of arrival data and corrected for, the same way a weather pipeline corrects against station history.",
+    },
+  },
+  advise: {
+    india: {
+      short: 'Best market, best date, one local-language sentence',
+      body: "The pipeline computes the net price at every combination of destination market and sell date — after transport, storage loss, and market vendor fees — then a broker agent picks the best option and writes a one-sentence explanation in English and Tamil, with a flag for whether she should seek credit against expected harvest. The answer is rarely \"sell today at your nearest market\"; it's usually hold, move, or both.",
+    },
+    kenya: {
+      short: 'Best market, best date, one local-language sentence',
+      body: "The pipeline computes the net price at every combination of destination market and sell date — after transport, storage loss, and market fees — then a broker agent picks the best option and writes a one-sentence explanation in English and Kiswahili, with a flag for whether she should seek credit against expected harvest. The answer is rarely \"sell today at your nearest market\"; it's usually hold, move, or both.",
+    },
+  },
+  deliver: {
+    india: {
+      short: 'SMS via Twilio, weekly during harvest',
+      body: "SMS via Twilio. Each enrolled farmer receives one recommendation per week during harvest season, in her own language, with the projected gain spelled out. Every delivery is logged with latency, cost, and confirmation.",
+    },
+    kenya: {
+      short: 'SMS via Twilio, weekly during harvest',
+      body: "SMS via Twilio. Each enrolled farmer receives one recommendation per week during harvest season, in her own language, with the projected gain spelled out. Every delivery is logged with latency, cost, and confirmation.",
+    },
+  },
+}
 
 // ── Interactive pipeline hero ────────────────────────────────────────────────
 
 // Distilled per-step copy: short phrase for the strip, body paragraph for the
-// detail panel. Tech-demo voice — no references to alternatives.
-const HERO_STEPS = [
-  {
-    num: 1,
-    name: 'Collect',
-    short: 'Weekly prices from two government databases',
-    body: "Real arrival prices — paddy, turmeric, cotton, onion, banana — pulled from Agmarknet and eNAM, two free public government databases. Fifteen regulated markets across Tamil Nadu, refreshed every week. This is ground truth that buyers already have and farmers don't.",
-    outputType: 'readings' as const,
-  },
-  {
-    num: 2,
-    name: 'Reconcile',
-    short: 'Agent investigates when the two sources disagree',
-    body: "The two databases disagree on the same market's price five to twelve percent of the time. When they do, an agent investigates — checking neighboring markets, seasonal norms, arrival volumes, and transport-arbitrage costs — and produces a single reconciled price with its reasoning logged. Farmers never see the disagreement; they just see the answer.",
-    outputType: 'reconciliation' as const,
-  },
-  {
-    num: 3,
-    name: 'Forecast',
-    short: 'Probabilistic forecasts out to thirty days',
-    body: "Chronos-2 — Amazon's open time-series foundation model — produces probabilistic forecasts for every commodity at every market, out to thirty days. Each market's historical bias is learned from five years of arrival data and corrected for, the same way a weather pipeline corrects against station history.",
-    outputType: 'forecast' as const,
-  },
-  {
-    num: 4,
-    name: 'Advise',
-    short: 'Best market, best date, one Tamil sentence',
-    body: "The pipeline computes the net price at every combination of destination market and sell date — after transport, storage loss, and market vendor fees — then a broker agent picks the best option and writes a one-sentence explanation in English and Tamil, with a flag for whether she should seek credit against expected harvest. The answer is rarely \"sell today at your nearest market\"; it's usually hold, move, or both.",
-    outputType: 'recommendation' as const,
-  },
-  {
-    num: 5,
-    name: 'Deliver',
-    short: 'SMS via Twilio, weekly during harvest',
-    body: "SMS via Twilio. Each enrolled farmer receives one recommendation per week during harvest season, in her own language, with the projected gain spelled out. Every delivery is logged with latency, cost, and confirmation.",
-    outputType: 'delivery' as const,
-  },
-]
+// detail panel. Tech-demo voice — no references to alternatives. Region-aware
+// copy lives in HERO_COPY above.
+type HeroOutputType =
+  | 'readings'
+  | 'reconciliation'
+  | 'forecast'
+  | 'recommendation'
+  | 'delivery'
 
-type HeroOutputType = typeof HERO_STEPS[number]['outputType']
+interface HeroStep {
+  num: number
+  name: string
+  short: string
+  body: string
+  outputType: HeroOutputType
+}
+
+function buildHeroSteps(region: 'india' | 'kenya'): HeroStep[] {
+  return [
+    { num: 1, name: 'Collect',     ...HERO_COPY.collect[region],     outputType: 'readings' },
+    { num: 2, name: 'Reconcile',   ...HERO_COPY.reconcile[region],   outputType: 'reconciliation' },
+    { num: 3, name: 'Forecast',    ...HERO_COPY.forecast[region],    outputType: 'forecast' },
+    { num: 4, name: 'Advise',      ...HERO_COPY.advise[region],      outputType: 'recommendation' },
+    { num: 5, name: 'Deliver',     ...HERO_COPY.deliver[region],     outputType: 'delivery' },
+  ]
+}
 
 function ExploreLink({ to, label }: { to: string; label: string }) {
   return (
@@ -81,6 +131,8 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
   const conflicts = usePriceConflicts()
   const recommendations = useSellRecommendations()
   const deliveries = useDeliveryLogs()
+  const region = useRegion()
+  const regionCopy = useRegionCopy()
 
   const panelStyle: React.CSSProperties = {
     fontFamily: '"Space Grotesk", system-ui, sans-serif',
@@ -92,10 +144,13 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
   if (outputType === 'readings') {
     const rows = (prices.data?.market_prices ?? []).slice(0, 3)
     const cols = 'minmax(0, 1.3fr) minmax(0, 1.1fr) minmax(0, 0.9fr)'
+    // Timezone hint matches the region so the copy doesn't look accidentally
+    // India-centric under Kenya.
+    const tzLabel = region === 'kenya' ? 'EAT' : 'IST'
     return (
       <div style={panelStyle}>
         <div className="eyebrow" style={{ marginBottom: '10px' }}>
-          Latest arrival prices · 11:30 IST
+          Latest arrival prices · 11:30 {tzLabel}
         </div>
         <div
           style={{
@@ -150,7 +205,7 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
                 {r.mandi_name}
               </span>
               <span style={{ color: '#1b1e2d', textAlign: 'right' }}>
-                {formatRs(r.reconciled_price_rs)}
+                {formatPrice(r.reconciled_price_rs, region)}
               </span>
             </div>
           ))}
@@ -161,10 +216,17 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
   }
 
   if (outputType === 'reconciliation') {
+    // Prefer a conflict that actually has investigation steps. Under Kenya the
+    // demo fixture may not carry the same commodity names as India, so fall
+    // back to "any with investigation steps" before taking the first conflict.
+    const hasSteps = (c: { investigation_steps?: unknown[] | null }) =>
+      !!c.investigation_steps && c.investigation_steps.length > 0
     const conflict =
       (conflicts.data?.price_conflicts ?? []).find(
-        (c) => c.commodity_name.toLowerCase().includes('turmeric') && c.investigation_steps?.length,
-      ) ?? conflicts.data?.price_conflicts?.[0]
+        (c) => c.commodity_name.toLowerCase().includes('turmeric') && hasSteps(c),
+      ) ??
+      (conflicts.data?.price_conflicts ?? []).find(hasSteps) ??
+      conflicts.data?.price_conflicts?.[0]
     if (!conflict) return <div style={panelStyle}>Loading…</div>
     return (
       <div style={panelStyle}>
@@ -180,17 +242,17 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
             maxWidth: '520px',
           }}
         >
-          {conflict.commodity_name} at {conflict.mandi_name}. Agmarknet posted{' '}
+          {conflict.commodity_name} at {conflict.mandi_name}. {regionCopy.primaryDataSource} posted{' '}
           <span style={{ color: '#c71f48', fontWeight: 500 }}>
-            {formatRs(conflict.agmarknet_price)}
+            {formatPrice(conflict.agmarknet_price, region)}
           </span>
-          , eNAM posted{' '}
+          , {regionCopy.secondaryDataSource} posted{' '}
           <span style={{ color: '#c71f48', fontWeight: 500 }}>
-            {formatRs(conflict.enam_price)}
+            {formatPrice(conflict.enam_price, region)}
           </span>
           . Investigation checked neighboring markets, arrival volumes, and historical spread — reconciled at{' '}
           <span style={{ color: '#446b26', fontWeight: 500 }}>
-            {formatRs(conflict.reconciled_price)}
+            {formatPrice(conflict.reconciled_price, region)}
           </span>
           .
         </p>
@@ -210,10 +272,15 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
   }
 
   if (outputType === 'forecast') {
+    // Under India the demo seed highlights tomato; under Kenya we just take
+    // the first available forecast since the commodity set is different.
+    const preferredCommodity = region === 'india' ? 'tomato' : ''
     const f =
-      (forecasts.data?.price_forecasts ?? []).find(
-        (x) => x.commodity_name.toLowerCase().includes('tomato'),
-      ) ?? forecasts.data?.price_forecasts?.[0]
+      (preferredCommodity
+        ? (forecasts.data?.price_forecasts ?? []).find((x) =>
+            x.commodity_name.toLowerCase().includes(preferredCommodity),
+          )
+        : undefined) ?? forecasts.data?.price_forecasts?.[0]
     if (!f) return <div style={panelStyle}>Loading…</div>
     // current_price_rs / price_7d can be null from api/price-forecast.ts when
     // the horizon row is missing — fall back to 0 so the teaser still renders.
@@ -272,13 +339,13 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
             >
               <span style={{ color: '#8d909e' }}>{r.day}</span>
               <span style={{ color: '#8d909e', textAlign: 'right' }}>
-                {formatRs(r.low)}
+                {formatPrice(r.low, region)}
               </span>
               <span style={{ color: '#1b1e2d', textAlign: 'right' }}>
-                {formatRs(r.median)}
+                {formatPrice(r.median, region)}
               </span>
               <span style={{ color: '#8d909e', textAlign: 'right' }}>
-                {formatRs(r.high)}
+                {formatPrice(r.high, region)}
               </span>
             </div>
           ))}
@@ -290,21 +357,32 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
 
   if (outputType === 'recommendation') {
     const recs = recommendations.data?.sell_recommendations ?? []
+    // Phase 1.4 rename: `recommendation_local` + `local_language_code`
+    // are the canonical fields. LANGUAGE_NAMES maps the code to a
+    // display name so adding e.g. Kikuyu ("ki") later is a data change.
+    const localText = (r: (typeof recs)[number]) => r.recommendation_local || ''
     const rec =
-      recs.find((r) => r.recommendation_tamil && r.recommendation_text) ??
-      recs.find((r) => r.recommendation_text || r.recommendation_tamil) ??
+      recs.find((r) => localText(r) && r.recommendation_text) ??
+      recs.find((r) => r.recommendation_text || localText(r)) ??
       recs[0]
     if (!rec) return <div style={panelStyle}>Loading…</div>
-    const hasTamil = Boolean(rec.recommendation_tamil)
+    const local = localText(rec)
+    const langCode = rec.local_language_code || ''
+    const langName = LANGUAGE_NAMES[langCode] ?? ''
+    const hasLocal = Boolean(local)
     return (
       <div style={panelStyle}>
         <div className="eyebrow" style={{ marginBottom: '10px' }}>
-          Recommendation · {rec.farmer_name}{hasTamil ? ' · Tamil' : ''}
+          Recommendation · {rec.farmer_name}
+          {hasLocal && langName ? ` · ${langName}` : ''}
         </div>
-        {hasTamil && (
+        {hasLocal && (
           <p
             style={{
-              fontFamily: '"Noto Serif Tamil", "Source Serif 4", Georgia, serif',
+              fontFamily:
+                langCode === 'ta'
+                  ? '"Noto Serif Tamil", "Source Serif 4", Georgia, serif'
+                  : '"Source Serif 4", Georgia, serif',
               fontSize: '12px',
               lineHeight: 1.5,
               color: '#1b1e2d',
@@ -314,7 +392,7 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
               wordBreak: 'break-word',
             }}
           >
-            {rec.recommendation_tamil}
+            {local}
           </p>
         )}
         {rec.recommendation_text && (
@@ -343,9 +421,16 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
       (deliveries.data?.delivery_logs ?? []).find((x) => x.status === 'sent') ??
       deliveries.data?.delivery_logs?.[0]
     const ts = d?.created_at ?? ''
-    const phone = (d?.phone ?? '+919443xxx821').replace(/\d(?=\d{3})/g, '•')
+    // Placeholder phone prefix is region-specific so the masked label matches
+    // the local dialing plan when the backend log is empty.
+    const fallbackPhone = region === 'kenya' ? '+254722xxx821' : '+919443xxx821'
+    const phone = (d?.phone ?? fallbackPhone).replace(/\d(?=\d{3})/g, '•')
     const length = d?.sms_text_local?.length ?? 92
     const farmerLabel = d?.farmer_name ?? phone.slice(0, 16)
+    const tzLabel = region === 'kenya' ? 'EAT' : 'IST'
+    // SMS line-cost placeholder — fractional currency unit per message.
+    const costLabel =
+      region === 'kenya' ? 'KES 1.20 · $0.0093' : 'Rs 0.01 · $0.00012'
     const row = (label: string, value: string) => (
       <div style={{ display: 'flex', gap: '8px', fontSize: '12px', lineHeight: '18px' }}>
         <span style={{ color: '#8d909e', minWidth: '56px' }}>{label}</span>
@@ -366,12 +451,12 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
           }}
         >
           {row('delivery', '0x7b2c')}
-          {row('cost', '₹0.01 · $0.00012')}
+          {row('cost', costLabel)}
           {row('farmer', phone.slice(0, 16))}
           {row('length', `${length} chars`)}
           {row('channel', `twilio · ${d?.status ?? 'sent'}`)}
           {row('confirm', 'delivered · ok')}
-          {row('sent', `${ts.slice(11, 19) || '14:23:07'} IST`)}
+          {row('sent', `${ts.slice(11, 19) || '14:23:07'} ${tzLabel}`)}
         </div>
         <ExploreLink to="/pipeline" label="→ See the delivery log" />
       </div>
@@ -385,13 +470,16 @@ function PipelineHero() {
   const [selected, setSelected] = useState(0) // default Ingest
   const [locked, setLocked] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const region = useRegion()
+  const regionCopy = useRegionCopy()
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 40)
     return () => clearTimeout(t)
   }, [])
 
-  const step = HERO_STEPS[selected]
+  const heroSteps = useMemo(() => buildHeroSteps(region), [region])
+  const step = heroSteps[selected]
 
   return (
     <section style={{ paddingTop: '0', paddingBottom: '0' }}>
@@ -405,7 +493,7 @@ function PipelineHero() {
           letterSpacing: '-0.01em',
         }}
       >
-        Crop pricing agent for farmers across Tamil Nadu
+        Crop pricing agent for farmers across {regionCopy.regionLabel}
       </h1>
       <p
         style={{
@@ -417,7 +505,7 @@ function PipelineHero() {
           maxWidth: '820px',
         }}
       >
-        An AI broker for smallholder farmers: pulls real prices from two government databases, reconciles the disagreements between them, and works out ideal markets to sell at.
+        An AI broker for smallholder farmers: pulls real prices from public market databases, reconciles the disagreements between them, and works out ideal markets to sell at.
       </p>
 
       <div style={{ height: '24px' }} />
@@ -426,7 +514,7 @@ function PipelineHero() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${HERO_STEPS.length}, 1fr)`,
+          gridTemplateColumns: `repeat(${heroSteps.length}, 1fr)`,
           gap: '8px',
           position: 'relative',
         }}
@@ -446,7 +534,7 @@ function PipelineHero() {
             zIndex: 0,
           }}
         />
-        {HERO_STEPS.map((s, i) => {
+        {heroSteps.map((s, i) => {
           const isActive = i === selected
           return (
             <button
@@ -620,6 +708,7 @@ export default function MarketPrices() {
   const stats = usePipelineStats()
   const prices = useMarketPrices()
   const conflicts = usePriceConflicts()
+  const regionCopy = useRegionCopy()
 
   if (stats.isLoading || prices.isLoading) return <DashboardSkeleton />
   if (stats.isError) return <ErrorState onRetry={() => stats.refetch()} />
@@ -653,7 +742,7 @@ export default function MarketPrices() {
         <MetricCard
           label="Markets monitored"
           value={mandisMonitored}
-          subtitle="across Tamil Nadu"
+          subtitle={`across ${regionCopy.regionLabel}`}
         />
         <MetricCard
           label="Commodities tracked"

@@ -8,13 +8,15 @@ import SellOptimizer from './pages/SellOptimizer'
 import Pipeline from './pages/Pipeline'
 import Inputs from './pages/Inputs'
 import NotFound from './pages/NotFound'
-import { tourSteps, stepRoutes, tourStyles } from './lib/tour'
+import { tourStepsForRegion, stepRoutes, tourStyles } from './lib/tour'
+import { useRegion } from './lib/region'
 import TourTooltip from './components/TourTooltip'
+import type { Step } from 'react-joyride'
 
 /**
  * Wait for the target element of a tour step to exist in the DOM.
  */
-function waitForTourTarget(stepIdx: number, timeoutMs = 3000): Promise<void> {
+function waitForTourTarget(tourSteps: Step[], stepIdx: number, timeoutMs = 3000): Promise<void> {
   const step = tourSteps[stepIdx]
   if (!step || typeof step.target !== 'string') return Promise.resolve()
   const selector = step.target
@@ -39,6 +41,8 @@ export default function App() {
   const [runTour, setRunTour] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
   const navigate = useNavigate()
+  const region = useRegion()
+  const tourSteps = tourStepsForRegion(region)
 
   // Listen for a manual relaunch event. Autostart is disabled by default.
   useEffect(() => {
@@ -75,13 +79,13 @@ export default function App() {
           navigate(nextRoute!)
         }
 
-        waitForTourTarget(nextIndex, 3000).then(() => {
+        waitForTourTarget(tourSteps, nextIndex, 3000).then(() => {
           setStepIndex(nextIndex)
           setRunTour(true)
         })
       }
     },
-    [navigate],
+    [navigate, tourSteps],
   )
 
   return (

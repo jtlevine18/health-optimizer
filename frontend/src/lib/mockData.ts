@@ -552,7 +552,10 @@ const SELL_RECOMMENDATIONS: SellRecommendation[] = FARMERS.map((f) => {
     all_options: all,
     potential_gain_rs: gain,
     recommendation_text: f.rec_en,
-    recommendation_tamil: f.rec_ta,
+    // Mock data is Tamil-only (India demo fixtures). Phase 1.4 rename:
+    // the canonical field is `recommendation_local` with a `local_language_code`.
+    recommendation_local: f.rec_ta,
+    local_language_code: 'ta',
     credit_readiness: {
       readiness: f.readiness,
       expected_revenue_rs: expected,

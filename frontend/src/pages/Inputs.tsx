@@ -8,7 +8,8 @@ import {
   usePipelineStats,
   type PriceConflict,
 } from '../lib/api'
-import { formatRs } from '../lib/format'
+import { formatPrice } from '../lib/format'
+import { useRegion, useRegionCopy } from '../lib/region'
 
 function deltaColor(pct: number): string {
   if (pct >= 10) return '#c71f48'
@@ -24,6 +25,8 @@ export default function Inputs() {
   const conflicts = usePriceConflicts()
   const prices = useMarketPrices()
   const stats = usePipelineStats()
+  const region = useRegion()
+  const regionCopy = useRegionCopy()
 
   const [tab, setTab] = useState<'prices' | 'conflicts'>('prices')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -59,7 +62,8 @@ export default function Inputs() {
       <div data-tour="inputs-title" style={{ marginBottom: '20px' }}>
         <h1 className="page-title">Reconciled market prices</h1>
         <p className="page-caption" style={{ maxWidth: '620px' }}>
-          Live prices from Agmarknet and eNAM, reconciled into one trustworthy number per market × commodity.
+          Live prices from {regionCopy.dataSourcesJoined}, reconciled into one
+          trustworthy number per market × commodity.
         </p>
       </div>
 
@@ -77,7 +81,7 @@ export default function Inputs() {
         <MetricCard
           label="Markets monitored"
           value={mandisMonitored}
-          subtitle="across Tamil Nadu"
+          subtitle={`across ${regionCopy.regionLabel}`}
         />
         <MetricCard
           label="Commodities tracked"
@@ -128,8 +132,8 @@ export default function Inputs() {
                   <tr>
                     <th>Market</th>
                     <th>Commodity</th>
-                    <th className="num">Agmarknet</th>
-                    <th className="num">eNAM</th>
+                    <th className="num">{regionCopy.primaryDataSource}</th>
+                    <th className="num">{regionCopy.secondaryDataSource}</th>
                     <th className="num">Delta</th>
                     <th className="num">Reconciled</th>
                     <th></th>
@@ -150,13 +154,13 @@ export default function Inputs() {
                       >
                         <td style={{ fontWeight: 500 }}>{c.mandi_name}</td>
                         <td>{c.commodity_name || c.commodity_id}</td>
-                        <td className="num">{formatRs(c.agmarknet_price)}</td>
-                        <td className="num">{formatRs(c.enam_price)}</td>
+                        <td className="num">{formatPrice(c.agmarknet_price, region)}</td>
+                        <td className="num">{formatPrice(c.enam_price, region)}</td>
                         <td className="num" style={{ color: deltaColor(c.delta_pct || 0) }}>
                           {(c.delta_pct || 0).toFixed(1)}%
                         </td>
                         <td className="num" style={{ color: '#446b26' }}>
-                          {formatRs(c.reconciled_price)}
+                          {formatPrice(c.reconciled_price, region)}
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <span
@@ -218,12 +222,16 @@ export default function Inputs() {
                       </thead>
                       <tbody>
                         <tr>
-                          <td>Agmarknet</td>
-                          <td className="num">{formatRs(selectedConflict.agmarknet_price)}</td>
+                          <td>{regionCopy.primaryDataSource}</td>
+                          <td className="num">
+                            {formatPrice(selectedConflict.agmarknet_price, region)}
+                          </td>
                         </tr>
                         <tr>
-                          <td>eNAM</td>
-                          <td className="num">{formatRs(selectedConflict.enam_price)}</td>
+                          <td>{regionCopy.secondaryDataSource}</td>
+                          <td className="num">
+                            {formatPrice(selectedConflict.enam_price, region)}
+                          </td>
                         </tr>
                         <tr>
                           <td style={{ color: '#606373' }}>Difference</td>
@@ -232,10 +240,11 @@ export default function Inputs() {
                             style={{ color: deltaColor(selectedConflict.delta_pct || 0) }}
                           >
                             {(selectedConflict.delta_pct || 0).toFixed(1)}% &middot;{' '}
-                            {formatRs(
+                            {formatPrice(
                               Math.abs(
                                 selectedConflict.agmarknet_price - selectedConflict.enam_price,
                               ),
+                              region,
                             )}
                           </td>
                         </tr>
@@ -251,7 +260,7 @@ export default function Inputs() {
                         maxWidth: '460px',
                       }}
                     >
-                      When government databases disagree, an AI agent investigates and decides
+                      When the public sources disagree, an AI agent investigates and decides
                       which price to trust.
                     </p>
                   </div>
@@ -263,7 +272,7 @@ export default function Inputs() {
                       className="metric-number"
                       style={{ marginTop: '8px', color: '#446b26' }}
                     >
-                      {formatRs(selectedConflict.reconciled_price)}
+                      {formatPrice(selectedConflict.reconciled_price, region)}
                     </p>
                     <p
                       style={{
@@ -384,7 +393,7 @@ export default function Inputs() {
                                   fontVariantNumeric: 'tabular-nums',
                                 }}
                               >
-                                {formatRs(p.reconciled_price_rs)}
+                                {formatPrice(p.reconciled_price_rs, region)}
                               </span>
                             </div>
                           ))}

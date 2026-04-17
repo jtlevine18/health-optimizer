@@ -32,7 +32,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      // Fallback for older rows without full_data
+      // Fallback for older rows without full_data. DB-schema gap: the
+      // SQL column stays as `sell_recommendations.full_data` JSONB (no
+      // dedicated `recommendation_local` column), so this fallback path
+      // emits empty strings for the new fields — any row written by a
+      // Phase 1.4+ pipeline run will hit the `full_data` branch above
+      // and carry `recommendation_local` + `local_language_code` through.
       const farmer = FARMERS[r.farmer_id] || { name: r.farmer_id, lat: 10.8, lon: 78.8, commodity: r.commodity_id, quantity: 20 }
       return {
         farmer_id: r.farmer_id,
@@ -56,7 +61,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         all_options: [],
         potential_gain_rs: r.potential_gain_rs || 0,
         recommendation_text: r.recommendation_text || '',
-        recommendation_tamil: '',
+        recommendation_local: '',
+        local_language_code: '',
         credit_readiness: null,
       }
     })

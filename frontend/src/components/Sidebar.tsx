@@ -3,22 +3,35 @@ import {
   Home,
   TrendingUp,
   IndianRupee,
+  Coins,
   Settings,
   FileText,
 } from 'lucide-react'
 import { usePipelineRuns } from '../lib/api'
+import { useRegion, useRegionCopy } from '../lib/region'
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Home', icon: Home, tourId: 'nav-home' },
-  { to: '/inputs', label: 'Data', icon: FileText, tourId: 'nav-inputs' },
-  { to: '/forecast', label: 'Forecast', icon: TrendingUp, tourId: 'nav-forecast' },
-  { to: '/sell', label: 'Sell Advisor', icon: IndianRupee, tourId: 'nav-sell' },
-  { to: '/pipeline', label: 'How it works', icon: Settings, tourId: 'nav-pipeline' },
-]
+function buildNavItems(region: 'india' | 'kenya') {
+  // Sell-advisor icon follows currency identity: IndianRupee under India,
+  // neutral Coins under Kenya (no Kenyan-shilling glyph in lucide).
+  const SellIcon = region === 'india' ? IndianRupee : Coins
+  return [
+    { to: '/', label: 'Home', icon: Home, tourId: 'nav-home' },
+    { to: '/inputs', label: 'Data', icon: FileText, tourId: 'nav-inputs' },
+    { to: '/forecast', label: 'Forecast', icon: TrendingUp, tourId: 'nav-forecast' },
+    { to: '/sell', label: 'Sell Advisor', icon: SellIcon, tourId: 'nav-sell' },
+    { to: '/pipeline', label: 'How it works', icon: Settings, tourId: 'nav-pipeline' },
+  ]
+}
 
 export default function Sidebar() {
   const { data: runsData } = usePipelineRuns()
+  const region = useRegion()
+  const regionCopy = useRegionCopy()
+  const NAV_ITEMS = buildNavItems(region)
   const dataMode = runsData?.runs?.[0]?.steps?.find((s) => s.step === 'ingest')?.details?.data_source_mode
+  // Label the live data source by region so the footer chip is honest.
+  const liveLabel =
+    region === 'kenya' ? `Live · ${regionCopy.primaryDataSource} daily` : 'Live · Agmarknet data.gov.in'
 
   return (
     <aside
@@ -74,7 +87,7 @@ export default function Sidebar() {
             color: dataMode === 'live' ? '#9ce0b5' : '#e0c884',
           }}
         >
-          {dataMode === 'live' ? 'Live · Agmarknet data.gov.in' : 'Demo · seed=42'}
+          {dataMode === 'live' ? liveLabel : 'Demo · seed=42'}
         </div>
       )}
       <div

@@ -13,7 +13,8 @@ import {
 import MetricCard from '../components/MetricCard'
 import { TableSkeleton, ErrorState } from '../components/LoadingState'
 import { usePriceForecasts } from '../lib/api'
-import { formatRs, directionArrow } from '../lib/format'
+import { formatPrice, directionArrow } from '../lib/format'
+import { useRegion } from '../lib/region'
 
 const tooltipStyle = {
   background: '#ffffff',
@@ -28,6 +29,7 @@ const tooltipStyle = {
 
 export default function Forecast() {
   const { data, isLoading, isError, refetch } = usePriceForecasts()
+  const region = useRegion()
   const [selectedCommodity, setSelectedCommodity] = useState<string | null>(null)
   const [selectedMandi, setSelectedMandi] = useState<string | null>(null)
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -349,15 +351,15 @@ export default function Forecast() {
                   }}
                 >
                   <td style={{ fontWeight: 500 }}>{f.mandi_name}</td>
-                  <td className="num">{formatRs(f.current_price_rs)}</td>
+                  <td className="num">{formatPrice(f.current_price_rs, region)}</td>
                   <td className="num" style={{ color: p7 >= cur ? '#4a7c59' : '#c71f48' }}>
-                    {formatRs(f.price_7d)}
+                    {formatPrice(f.price_7d, region)}
                   </td>
                   <td className="num" style={{ color: p14 >= cur ? '#4a7c59' : '#c71f48' }}>
-                    {formatRs(f.price_14d)}
+                    {formatPrice(f.price_14d, region)}
                   </td>
                   <td className="num" style={{ color: p30 >= cur ? '#4a7c59' : '#c71f48' }}>
-                    {formatRs(f.price_30d)}
+                    {formatPrice(f.price_30d, region)}
                   </td>
                   <td>
                     <span style={{ color: f.direction === 'up' ? '#4a7c59' : f.direction === 'down' ? '#c71f48' : '#606373' }}>
@@ -401,7 +403,7 @@ export default function Forecast() {
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: '#8d909e' }}
-                  tickFormatter={(v: number) => formatRs(v)}
+                  tickFormatter={(v: number) => formatPrice(v, region)}
                   width={80}
                   stroke="#e8e5e1"
                 />
@@ -415,7 +417,7 @@ export default function Forecast() {
                       ci_lower: 'CI lower',
                       ci_upper: 'CI upper',
                     }
-                    return [formatRs(value), labels[name] ?? name]
+                    return [formatPrice(value, region), labels[name] ?? name]
                   }}
                 />
                 {/* Confidence band */}
