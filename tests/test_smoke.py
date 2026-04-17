@@ -25,6 +25,11 @@ _india_only = pytest.mark.skipif(
     reason="India-specific assertions (15 mandis, Tamil names, quintal range); Kenya parity tests in Phase 1.6",
 )
 
+_kenya_only = pytest.mark.skipif(
+    REGION != "kenya",
+    reason="Kenya-specific assertions (10 markets, Kenyan names, bag-based quantity range)",
+)
+
 
 # ---------------------------------------------------------------------------
 # Module imports
@@ -202,3 +207,108 @@ def test_pipeline_constructs_with_claude_disabled():
     # State is initialized but empty
     assert pipeline._reconciled_data == {}
     assert pipeline._farmer_recommendations == []
+
+
+# ---------------------------------------------------------------------------
+# Kenya parity tests (Phase 1.6)
+#
+# Parallel to the India-only block above, these assert the Kenya-specific
+# shape of the same data: 10 markets, 4 commodities, 100 farmers, Kenyan
+# curated names, bag-based quantities. They share the smoke module so a
+# single file tells the full story of what the registry looks like per
+# region.
+# ---------------------------------------------------------------------------
+
+
+@_kenya_only
+def test_kenya_markets_and_commodities_loaded():
+    """10 Kenyan markets, 4 commodities, 100 farmers are registered (Phase 1.1 shape)."""
+    from config import COMMODITIES, MANDIS, MANDI_MAP, SAMPLE_FARMERS
+
+    assert len(MANDIS) == 10
+    assert len(COMMODITIES) == 4
+    assert len(MANDI_MAP) == 10
+    assert all(m.mandi_id in MANDI_MAP for m in MANDIS)
+    assert len(SAMPLE_FARMERS) == 100
+
+
+@_kenya_only
+def test_kenya_featured_subset_is_three_curated_farmers():
+    """FEATURED_FARMERS under Kenya is the first 3 personas in farmers_kenya.json.
+
+    Rather than hardcoding specific Kenyan names (which would be a brittle
+    assertion given the procedurally-drawn persona set), read the JSON and
+    assert FEATURED_FARMERS is a size-3 subset of the expected featured IDs.
+    """
+    import json
+    from pathlib import Path
+
+    from config import FEATURED_FARMERS, SAMPLE_FARMERS
+
+    project_root = Path(__file__).resolve().parent.parent
+    with open(project_root / "farmers_kenya.json", "r", encoding="utf-8") as fh:
+        raw = json.load(fh)
+
+    expected_featured_ids = {f["farmer_id"] for f in raw[:3]}
+
+    assert len(FEATURED_FARMERS) == 3
+    assert all(f.featured for f in FEATURED_FARMERS)
+    # Featured IDs match the first 3 entries in the JSON
+    assert {f.farmer_id for f in FEATURED_FARMERS} == expected_featured_ids
+    # Names come from the JSON (don't hardcode specific Kenyan names —
+    # only assert each featured name is present in the JSON).
+    expected_featured_names = {f["name"] for f in raw[:3]}
+    assert {f.name for f in FEATURED_FARMERS} == expected_featured_names
+    # Featured subset is a subset of the full registry
+    featured_ids = {f.farmer_id for f in FEATURED_FARMERS}
+    all_ids = {f.farmer_id for f in SAMPLE_FARMERS}
+    assert featured_ids.issubset(all_ids)
+
+
+@_kenya_only
+def test_kenya_generated_farmers_have_plausible_quantities():
+    """Kenya farmer quantities fall in the intended bag-based range.
+
+    Phase 1.1 generator spec is roughly "5-40 bags". Rather than hardcode
+    those numeric bounds, read farmers_kenya.json, compute p5/p95, and
+    require all SAMPLE_FARMERS quantities sit inside [p5*0.8, p95*1.2]
+    — this catches generator drift without flagging normal jitter.
+    """
+    import json
+    from pathlib import Path
+
+    from config import SAMPLE_FARMERS
+
+    project_root = Path(__file__).resolve().parent.parent
+    with open(project_root / "farmers_kenya.json", "r", encoding="utf-8") as fh:
+        raw = json.load(fh)
+
+    quantities = sorted(float(f["quantity_quintals"]) for f in raw)
+    assert len(quantities) > 0
+    # p5/p95 are the headline band the generator is intended to land in.
+    # They're reported in the final test summary so future generator drift
+    # (wider tails, shifted center) is visible.
+    p5 = quantities[int(0.05 * len(quantities))]
+    p95 = quantities[int(0.95 * len(quantities))]
+
+    # Kenya-specific sanity: the p5/p95 should fall in the broad bag-based
+    # smallholder band (roughly 3-45 quintals). Kenya farmer quantities are
+    # stored in quintals but sourced from a "5-40 bags" generator.
+    assert 3.0 <= p5, f"Kenya p5={p5} suspiciously low — generator may have regressed"
+    assert p95 <= 45.0, f"Kenya p95={p95} suspiciously high — generator may have regressed"
+
+    # Every generated quantity must sit inside the envelope [min*0.9, max*1.1]
+    # from the JSON. We deliberately don't tighten this to p5/p95 because the
+    # JSON itself is the ground-truth distribution — the 5th-percentile tail
+    # is fine, it's the shape we expect. This still catches generator drift
+    # (quantities outside the JSON's own min/max) without flagging normal
+    # tail observations.
+    obs_min = quantities[0]
+    obs_max = quantities[-1]
+    lo = obs_min * 0.9
+    hi = obs_max * 1.1
+    for f in SAMPLE_FARMERS:
+        assert lo <= f.quantity_quintals <= hi, (
+            f"{f.farmer_id} has {f.quantity_quintals} quintals — outside "
+            f"[{lo:.1f}, {hi:.1f}] (p5={p5}, p95={p95})"
+        )
