@@ -1,19 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-
-const COMMODITY_NAMES: Record<string, string> = {
-  'RICE-SAMBA': 'Rice (Samba Paddy)', 'TUR-FIN': 'Turmeric', 'BAN-ROB': 'Banana',
-  'GNUT-POD': 'Groundnut', 'COT-MCU': 'Cotton', 'ONI-RED': 'Onion',
-  'COP-DRY': 'Coconut (Copra)', 'MZE-YEL': 'Maize', 'URD-BLK': 'Black Gram (Urad)',
-  'MNG-GRN': 'Green Gram (Moong)',
-}
-
-const MANDI_NAMES: Record<string, string> = {
-  'MND-TJR': 'Thanjavur', 'MND-MDR': 'Madurai Periyar', 'MND-SLM': 'Salem',
-  'MND-ERD': 'Erode (Turmeric Market)', 'MND-CBE': 'Coimbatore', 'MND-TNV': 'Tirunelveli',
-  'MND-KBK': 'Kumbakonam', 'MND-VPM': 'Villupuram', 'MND-DGL': 'Dindigul',
-  'MND-TRC': 'Tiruchirappalli', 'MND-NGP': 'Nagapattinam', 'MND-KRR': 'Karur',
-  'MND-VLR': 'Vellore', 'MND-TUT': 'Thoothukudi', 'MND-RMD': 'Ramanathapuram',
-}
+import { getCommodityName, getMandiName, getRegion, isRegionMandi } from './_region'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -22,9 +8,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!dbUrl) return res.status(500).json({ error: 'DATABASE_URL not set' })
     const { neon } = await import('@neondatabase/serverless')
     const sql = neon(dbUrl)
+    const region = getRegion()
 
-    // Only serve prices written in the last 14 days so stale demo rows stop
-    // masquerading as current market prices.
+    // Only the last 14 days so stale rows stop masquerading as current.
     const prices = await sql`
       SELECT DISTINCT ON (mandi_id, commodity_id)
         mandi_id, commodity_id, price_rs, source, date, full_data, created_at
@@ -33,9 +19,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ORDER BY mandi_id, commodity_id, created_at DESC
     `
 
-    const enriched = prices.map((p: any) => {
-      const mandi_name = MANDI_NAMES[p.mandi_id] || p.mandi_id
-      const commodity_name = COMMODITY_NAMES[p.commodity_id] || p.commodity_id
+    const filtered = prices.filter((p: any) => isRegionMandi(p.mandi_id, region))
+
+    const enriched = filtered.map((p: any) => {
+      const mandi_name = getMandiName(p.mandi_id, region)
+      const commodity_name = getCommodityName(p.commodity_id, region)
       if (p.full_data && typeof p.full_data === 'object') {
         return { ...p.full_data, mandi_name, commodity_name }
       }
@@ -55,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     })
 
-    res.json({ market_prices: enriched, total: enriched.length, source: 'neon' })
+    res.json({ market_prices: enriched, total: enriched.length, region, source: 'neon' })
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? String(e) })
   }

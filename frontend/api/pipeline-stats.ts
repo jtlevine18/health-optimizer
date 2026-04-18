@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { getDataSources, getMandis, getRegion, isRegionMandi } from './_region'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -6,6 +7,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!dbUrl) return res.status(500).json({ error: 'DATABASE_URL not set' })
     const { neon } = await import('@neondatabase/serverless')
     const sql = neon(dbUrl)
+    const region = getRegion()
 
     const runs = await sql`
       SELECT run_id, started_at, status, duration_sec, total_cost_usd,
@@ -19,21 +21,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const successfulRuns = runs.filter((r: any) => r.status === 'ok').length
     const totalCost = runs.reduce((s: number, r: any) => s + (r.total_cost_usd || 0), 0)
 
-    const priceCount = await sql`SELECT count(DISTINCT commodity_id) as n FROM market_prices`
-    const mandiCount = await sql`SELECT count(DISTINCT mandi_id) as n FROM market_prices`
+    // Count distinct mandi/commodity ids filtered to the active region's
+    // prefix — stops pre-migration India rows from inflating Kenya stats.
+    const mandiRows = await sql`SELECT DISTINCT mandi_id FROM market_prices`
+    const commodityRows = await sql`
+      SELECT DISTINCT mp.commodity_id, mp.mandi_id
+      FROM market_prices mp
+    `
+    const mandiCount = (mandiRows as any[]).filter((r) => isRegionMandi(r.mandi_id, region)).length
+    const commoditySet = new Set(
+      (commodityRows as any[])
+        .filter((r) => isRegionMandi(r.mandi_id, region))
+        .map((r) => r.commodity_id)
+    )
 
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.json({
       total_runs: totalRuns,
       successful_runs: successfulRuns,
       success_rate: totalRuns > 0 ? Math.round(successfulRuns / totalRuns * 100) / 100 : 0,
-      mandis_monitored: Number(mandiCount[0]?.n) || 15,
-      commodities_tracked: Number(priceCount[0]?.n) || 10,
+      mandis_monitored: mandiCount || getMandis(region).length,
+      commodities_tracked: commoditySet.size || 4,
       price_conflicts_found: 0,
       total_cost_usd: Math.round(totalCost * 100) / 100,
       avg_cost_per_run_usd: totalRuns > 0 ? Math.round(totalCost / totalRuns * 10000) / 10000 : 0,
       last_run: runs[0]?.started_at || null,
-      data_sources: ['Agmarknet (data.gov.in)', 'eNAM', 'NASA POWER'],
+      data_sources: getDataSources(region),
+      region,
       source: 'neon',
     })
   } catch (e: any) {

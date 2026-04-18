@@ -1,21 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-
-const COMMODITY_NAMES: Record<string, string> = {
-  'RICE-SAMBA': 'Rice (Samba)', 'GNUT-POD': 'Groundnut', 'TUR-FIN': 'Turmeric',
-  'COT-MCU': 'Cotton', 'ONI-RED': 'Onion', 'MZE-YEL': 'Maize',
-  'URAD-BLK': 'Urad (Black Gram)', 'MOONG-GRN': 'Moong (Green Gram)',
-  'BAN-ROB': 'Banana', 'COCO-HUS': 'Coconut',
-}
+import { getCommodityName, getRegion } from './_region'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
   try {
     const dbUrl = process.env.DATABASE_URL
-    if (!dbUrl) {
-      res.setHeader('Access-Control-Allow-Origin', '*')
-      return res.json({ price_conflicts: [], total: 0, source: 'neon' })
-    }
+    if (!dbUrl) return res.json({ price_conflicts: [], total: 0, source: 'neon' })
     const { neon } = await import('@neondatabase/serverless')
     const sql = neon(dbUrl)
+    const region = getRegion()
 
     const runs = await sql`
       SELECT price_conflicts FROM pipeline_runs
@@ -25,20 +18,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const raw = runs[0]?.price_conflicts || []
 
-    // Enrich with commodity names and provide defaults for missing fields
     const conflicts = raw.map((c: any) => ({
       ...c,
-      commodity_name: c.commodity_name || COMMODITY_NAMES[c.commodity_id] || c.commodity_id,
+      commodity_name: c.commodity_name || getCommodityName(c.commodity_id, region),
       delta_pct: c.delta_pct || 0,
       reasoning: c.reasoning || c.resolution || 'Auto-reconciled based on source reliability',
       confidence: c.confidence || 0.7,
       investigation_steps: c.investigation_steps || null,
     }))
 
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.json({ price_conflicts: conflicts, total: conflicts.length, source: 'neon' })
-  } catch (e: any) {
-    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.json({ price_conflicts: conflicts, total: conflicts.length, region, source: 'neon' })
+  } catch (_e: any) {
     res.json({ price_conflicts: [], total: 0, source: 'neon' })
   }
 }
