@@ -222,12 +222,17 @@ def test_pipeline_constructs_with_claude_disabled():
 
 @_kenya_only
 def test_kenya_markets_and_commodities_loaded():
-    """10 Kenyan markets, 4 commodities, 100 farmers are registered (Phase 1.1 shape)."""
+    """11 Kenyan markets, 4 commodities, 100 farmers are registered.
+
+    Phase 11 swapped 2 no-KAMIS-coverage markets (Kitengela/Kajiado,
+    Kaanwa/Tharaka Nithi) for 3 KAMIS-covered ones (Machakos, Nkubu/Meru,
+    Sondu-Kericho), netting +1.
+    """
     from config import COMMODITIES, MANDIS, MANDI_MAP, SAMPLE_FARMERS
 
-    assert len(MANDIS) == 10
+    assert len(MANDIS) == 11
     assert len(COMMODITIES) == 4
-    assert len(MANDI_MAP) == 10
+    assert len(MANDI_MAP) == 11
     assert all(m.mandi_id in MANDI_MAP for m in MANDIS)
     assert len(SAMPLE_FARMERS) == 100
 

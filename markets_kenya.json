@@ -7,7 +7,11 @@
     "latitude": -0.0952,
     "longitude": 34.7523,
     "market_type": "wholesale",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "GRG-KEN"],
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "GRG-KEN"
+    ],
     "avg_daily_arrivals_tonnes": 340.0,
     "enam_integrated": false,
     "reporting_quality": "good"
@@ -18,9 +22,14 @@
     "district": "Nairobi",
     "state": "Nairobi",
     "latitude": -1.2921,
-    "longitude": 36.8270,
+    "longitude": 36.827,
     "market_type": "terminal",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "POT-RIR", "GRG-KEN"],
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "POT-RIR",
+      "GRG-KEN"
+    ],
     "avg_daily_arrivals_tonnes": 620.0,
     "enam_integrated": false,
     "reporting_quality": "good"
@@ -33,7 +42,12 @@
     "latitude": -4.0277,
     "longitude": 39.6876,
     "market_type": "terminal",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "POT-RIR", "GRG-KEN"],
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "POT-RIR",
+      "GRG-KEN"
+    ],
     "avg_daily_arrivals_tonnes": 480.0,
     "enam_integrated": false,
     "reporting_quality": "good"
@@ -46,7 +60,11 @@
     "latitude": 0.5143,
     "longitude": 35.2698,
     "market_type": "wholesale",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "POT-RIR"],
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "POT-RIR"
+    ],
     "avg_daily_arrivals_tonnes": 410.0,
     "enam_integrated": false,
     "reporting_quality": "good"
@@ -57,35 +75,30 @@
     "district": "Nakuru",
     "state": "Nakuru",
     "latitude": -0.3031,
-    "longitude": 36.0800,
+    "longitude": 36.08,
     "market_type": "wholesale",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "POT-RIR"],
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "POT-RIR"
+    ],
     "avg_daily_arrivals_tonnes": 295.0,
     "enam_integrated": false,
     "reporting_quality": "good"
-  },
-  {
-    "mandi_id": "MKT-KTG",
-    "name": "Kitengela",
-    "district": "Kajiado",
-    "state": "Kajiado",
-    "latitude": -1.4747,
-    "longitude": 36.9587,
-    "market_type": "regulated",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "GRG-KEN"],
-    "avg_daily_arrivals_tonnes": 95.0,
-    "enam_integrated": false,
-    "reporting_quality": "poor"
   },
   {
     "mandi_id": "MKT-KGM",
     "name": "Kangemi Market",
     "district": "Nairobi",
     "state": "Nairobi",
-    "latitude": -1.2680,
+    "latitude": -1.268,
     "longitude": 36.7462,
     "market_type": "wholesale",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "POT-RIR"],
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "POT-RIR"
+    ],
     "avg_daily_arrivals_tonnes": 175.0,
     "enam_integrated": false,
     "reporting_quality": "moderate"
@@ -98,7 +111,11 @@
     "latitude": -0.4833,
     "longitude": 37.1333,
     "market_type": "wholesale",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "POT-RIR"],
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "POT-RIR"
+    ],
     "avg_daily_arrivals_tonnes": 230.0,
     "enam_integrated": false,
     "reporting_quality": "good"
@@ -108,25 +125,67 @@
     "name": "Kathonzweni",
     "district": "Makueni",
     "state": "Makueni",
-    "latitude": -1.9500,
-    "longitude": 37.6500,
+    "latitude": -1.95,
+    "longitude": 37.65,
     "market_type": "regulated",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "GRG-KEN"],
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "GRG-KEN"
+    ],
     "avg_daily_arrivals_tonnes": 85.0,
     "enam_integrated": false,
     "reporting_quality": "moderate"
   },
   {
-    "mandi_id": "MKT-KAN",
-    "name": "Kaanwa",
-    "district": "Tharaka Nithi",
-    "state": "Tharaka Nithi",
-    "latitude": -0.1650,
-    "longitude": 37.7600,
-    "market_type": "regulated",
-    "commodities_traded": ["MZE-DRY", "BEN-YGN", "GRG-KEN"],
-    "avg_daily_arrivals_tonnes": 70.0,
+    "mandi_id": "MKT-MAC",
+    "name": "Machakos Main Market",
+    "district": "Machakos",
+    "state": "Machakos",
+    "latitude": -1.5167,
+    "longitude": 37.2634,
+    "market_type": "wholesale",
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "GRG-KEN"
+    ],
+    "avg_daily_arrivals_tonnes": 110.0,
     "enam_integrated": false,
-    "reporting_quality": "poor"
+    "reporting_quality": "good"
+  },
+  {
+    "mandi_id": "MKT-MRU",
+    "name": "Nkubu",
+    "district": "Meru",
+    "state": "Meru",
+    "latitude": 0.0571,
+    "longitude": 37.6714,
+    "market_type": "wholesale",
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "POT-RIR"
+    ],
+    "avg_daily_arrivals_tonnes": 90.0,
+    "enam_integrated": false,
+    "reporting_quality": "good"
+  },
+  {
+    "mandi_id": "MKT-KCH",
+    "name": "Sondu- Kericho",
+    "district": "Kericho",
+    "state": "Kericho",
+    "latitude": -0.3689,
+    "longitude": 35.2833,
+    "market_type": "wholesale",
+    "commodities_traded": [
+      "MZE-DRY",
+      "BEN-YGN",
+      "POT-RIR"
+    ],
+    "avg_daily_arrivals_tonnes": 75.0,
+    "enam_integrated": false,
+    "reporting_quality": "moderate"
   }
 ]

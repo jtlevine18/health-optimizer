@@ -24,6 +24,7 @@ don't take new dependencies on the production app.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import csv
 import logging
 import os
@@ -94,6 +95,41 @@ _USER_AGENT = (
 # published rate limit; 3s/request matches the benchmark reference and
 # avoids tripping whatever the portal's operational limits are.
 _last_request_at = 0.0
+
+# Pooled httpx.Client so we don't tear down TCP/TLS state between each
+# retry attempt or between product requests. Lazily initialized on the
+# first `_fetch_html_with_retry` call in-process; closed at process exit.
+_HTTP_CLIENT: httpx.Client | None = None
+_WARNINGS_DISABLED = False
+
+
+def _get_http_client() -> httpx.Client:
+    """Return the process-wide pooled httpx.Client, initializing on first use."""
+    global _HTTP_CLIENT, _WARNINGS_DISABLED
+    if not _WARNINGS_DISABLED:
+        # KAMIS cert is expired/self-signed — suppress urllib3's warning once.
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        _WARNINGS_DISABLED = True
+    if _HTTP_CLIENT is None:
+        _HTTP_CLIENT = httpx.Client(
+            follow_redirects=True,
+            timeout=_TIMEOUT_SECONDS,
+            headers={"User-Agent": _USER_AGENT, "Accept": "text/html"},
+            verify=False,
+        )
+        atexit.register(_close_http_client)
+    return _HTTP_CLIENT
+
+
+def _close_http_client() -> None:
+    global _HTTP_CLIENT
+    if _HTTP_CLIENT is not None:
+        try:
+            _HTTP_CLIENT.close()
+        except Exception:
+            pass
+        _HTTP_CLIENT = None
 
 
 # --- Public entry point --------------------------------------------------
@@ -178,6 +214,13 @@ async def _fetch_live(
 ) -> dict[str, list[PriceRecord]]:
     """Hit the live portal with a 3s polite delay + retry-with-backoff.
 
+    One request per commodity with `county=None` — KAMIS returns every
+    county's rows in a single response when `county[]` is omitted, so
+    for N markets × M commodities we issue M requests instead of N*M.
+    The parsed rows are bucketed locally by market name via
+    ``_filter_by_market`` so each caller-supplied market only sees the
+    rows whose "Market" cell matches it.
+
     Runs the blocking httpx call inside `asyncio.to_thread` so this
     coroutine composes with the pipeline's asyncio.gather without us
     having to rewrite the parser async-native.
@@ -185,10 +228,6 @@ async def _fetch_live(
     end = date.today()
     start = end - timedelta(days=days_back)
     results: dict[str, list[PriceRecord]] = {_market_id(m): [] for m in markets}
-
-    # Suppress urllib3 InsecureRequestWarning once up front (KAMIS cert is expired).
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     for commodity in commodities:
         product_id = _resolve_product_id(commodity)
@@ -199,24 +238,28 @@ async def _fetch_live(
             )
             continue
 
-        for market in markets:
-            county = _market_county(market)
-            url = build_search_url(
-                product_id=product_id,
-                county=county,
-                start=start,
-                end=end,
+        # One request per product, all counties. `per_page=2000` (the
+        # build_search_url default) is high enough to carry a 30-day
+        # window across ~49 counties comfortably.
+        url = build_search_url(
+            product_id=product_id,
+            county=None,
+            start=start,
+            end=end,
+        )
+        try:
+            html = await asyncio.to_thread(_fetch_html_with_retry, url)
+        except Exception as exc:
+            log.warning(
+                "KAMIS: fetch failed for commodity %s (%s): %s",
+                commodity.get("id"), url, exc,
             )
-            try:
-                html = await asyncio.to_thread(_fetch_html_with_retry, url)
-            except Exception as exc:
-                log.warning(
-                    "KAMIS: fetch failed for %s / %s (%s): %s",
-                    _market_id(market), commodity.get("id"), url, exc,
-                )
-                continue
+            continue
 
-            raw_records = parse_search_result_html(html)
+        raw_records = parse_search_result_html(html)
+
+        # Bucket the single response across every caller-supplied market.
+        for market in markets:
             filtered = _filter_by_market(raw_records, market)
             for rec in filtered:
                 results[_market_id(market)].append(
@@ -231,20 +274,17 @@ async def _fetch_live(
 def _fetch_html_with_retry(url: str) -> str:
     """Synchronous GET with 3s polite delay + exponential backoff.
 
-    KAMIS's cert is expired/self-signed → `verify=False`. We don't fall
-    back to HTTP because the portal 301-redirects HTTP→HTTPS.
+    Reuses a process-wide pooled ``httpx.Client`` (see ``_get_http_client``)
+    rather than opening a fresh client per request. KAMIS's cert is
+    expired/self-signed → `verify=False`. We don't fall back to HTTP
+    because the portal 301-redirects HTTP→HTTPS.
     """
+    client = _get_http_client()
     last_exc: Exception | None = None
     for attempt in range(_MAX_RETRIES):
         _polite_delay()
         try:
-            with httpx.Client(
-                follow_redirects=True,
-                timeout=_TIMEOUT_SECONDS,
-                headers={"User-Agent": _USER_AGENT, "Accept": "text/html"},
-                verify=False,
-            ) as client:
-                resp = client.get(url)
+            resp = client.get(url)
             resp.raise_for_status()
             return resp.text
         except (httpx.HTTPError, httpx.TimeoutException) as exc:

@@ -52,18 +52,25 @@ FEATURE_NAMES: tuple[str, ...] = (
 # Keys are lowercased commodity substrings; lookup is substring match so
 # "Dry maize", "dry_maize", "Maize (Dry)" all resolve to the same calendar.
 _SEASON_CALENDARS: dict[str, dict[int, int]] = {
+    # India pulses listed first (most specific substrings) so "Moong (Green
+    # Gram)"-shaped labels don't accidentally match the Kenya "green gram" key.
+    "tur": {1: 3, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 2, 9: 2, 10: 3, 11: 3, 12: 3},
+    "moong": {1: 3, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 2, 9: 2, 10: 3, 11: 3, 12: 3},
+    "urad": {1: 3, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 2, 9: 2, 10: 3, 11: 3, 12: 3},
+    "masur": {1: 2, 2: 3, 3: 3, 4: 3, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 1, 11: 1, 12: 2},
     # Kenya maize (two rainy seasons): short rains harvest Feb-Mar,
     # long rains harvest Aug-Oct, lean May-Jul.
     "maize": {
         1: 3, 2: 3, 3: 3, 4: 1, 5: 0, 6: 0,
         7: 0, 8: 3, 9: 3, 10: 3, 11: 1, 12: 2,
     },
-    # India kharif pulses (Tur/Moong/Urad): sowing Jun-Jul, harvest Oct-Dec.
-    "tur": {1: 3, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 2, 9: 2, 10: 3, 11: 3, 12: 3},
-    "moong": {1: 3, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 2, 9: 2, 10: 3, 11: 3, 12: 3},
-    "urad": {1: 3, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 2, 9: 2, 10: 3, 11: 3, 12: 3},
-    # Masur (lentil) is rabi: sowing Oct-Nov, harvest Feb-Apr.
-    "masur": {1: 2, 2: 3, 3: 3, 4: 3, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 1, 11: 1, 12: 2},
+    # Kenya beans + green grams: long-rains sow Mar-Apr → harvest Jul-Aug,
+    # short-rains sow Oct-Nov → harvest Jan-Feb.
+    "bean": {1: 3, 2: 3, 3: 1, 4: 1, 5: 2, 6: 2, 7: 3, 8: 3, 9: 0, 10: 1, 11: 1, 12: 2},
+    "green gram": {1: 3, 2: 3, 3: 1, 4: 1, 5: 2, 6: 2, 7: 3, 8: 3, 9: 0, 10: 1, 11: 1, 12: 2},
+    # Kenya Irish potato (highland, Nyandarua/Meru): long-rains crop planted
+    # Mar-Apr → harvested Jul-Aug; short-rains planted Sep-Oct → Dec-Jan.
+    "potato": {1: 3, 2: 0, 3: 1, 4: 1, 5: 2, 6: 2, 7: 3, 8: 3, 9: 1, 10: 1, 11: 2, 12: 3},
 }
 
 # Keywords in mandi strings that indicate the Kenya region.
