@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getFeaturedFarmers, getMandiName, getRegion, isRegionFarmer } from './_region'
+import { getFeaturedFarmers, getMandiName, getRegion, isRegionFarmer } from './_region.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
