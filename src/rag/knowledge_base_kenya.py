@@ -14,16 +14,7 @@ module exactly: KnowledgeChunk dataclass with id/title/source/category/text.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-
-@dataclass
-class KnowledgeChunk:
-    id: str
-    title: str
-    source: str
-    category: str
-    text: str
+from src.rag.knowledge_base import KnowledgeChunk
 
 
 KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [

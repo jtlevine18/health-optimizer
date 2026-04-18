@@ -18,28 +18,17 @@ per region but deterministic.
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
-import sys
-
-import pytest
-
-
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+from tests._subprocess_driver import run_driver
 
 
 _PIPELINE_DRIVER = r"""
 import asyncio
 import json
-import os
 import sys
 
 sys.path.insert(0, __REPO_ROOT__)
 
 from src.pipeline import MarketIntelligencePipeline
-
-os.environ.pop("ANTHROPIC_API_KEY", None)
 
 
 async def _run():
@@ -70,45 +59,6 @@ print("__PIPELINE_RESULT_END__")
 """
 
 
-def _run_pipeline_in_subprocess(region_value: str) -> dict:
-    """Run the pipeline in a fresh Python process under the given region.
-
-    Returns the parsed result JSON. Raises on subprocess failure.
-    """
-    env = os.environ.copy()
-    env["MARKET_INTEL_REGION"] = region_value
-    env["MARKET_INTEL_DEMO_MODE"] = "1"
-    env.pop("ANTHROPIC_API_KEY", None)
-
-    driver = _PIPELINE_DRIVER.replace("__REPO_ROOT__", repr(REPO_ROOT))
-
-    proc = subprocess.run(
-        [sys.executable, "-c", driver],
-        env=env,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-    if proc.returncode != 0:
-        raise AssertionError(
-            f"Pipeline subprocess failed for region={region_value}:\n"
-            f"stdout:\n{proc.stdout}\n"
-            f"stderr:\n{proc.stderr}"
-        )
-
-    # Extract the JSON block between sentinels (the rest is log noise)
-    stdout = proc.stdout
-    start = stdout.find("__PIPELINE_RESULT_BEGIN__")
-    end = stdout.find("__PIPELINE_RESULT_END__")
-    if start < 0 or end < 0:
-        raise AssertionError(
-            f"Could not find result sentinels in subprocess output:\n{stdout}"
-        )
-    payload = stdout[start + len("__PIPELINE_RESULT_BEGIN__"):end].strip()
-    return json.loads(payload)
-
-
 def test_pipeline_runs_end_to_end_both_regions(region):
     """Full pipeline runs to completion for both India and Kenya.
 
@@ -117,7 +67,7 @@ def test_pipeline_runs_end_to_end_both_regions(region):
     regions; each invocation spawns a fresh Python subprocess so that
     module-level `from config import REGION` captures are refreshed.
     """
-    result = _run_pipeline_in_subprocess(region)
+    result = run_driver(region, _PIPELINE_DRIVER)
 
     # Status sanity
     assert result["status"] in ("ok", "partial"), (

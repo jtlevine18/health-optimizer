@@ -169,12 +169,11 @@ class MarketIntelligencePipeline:
         self._model_metrics: dict = {}
         self._price_conflicts: list[dict] = []
         self._forecaster: ChronosXGBoostForecaster | None = None
-        # DFL policy: lazy-loaded on first _step_optimize call. Stays None if
-        # lightgbm isn't installed or the model file doesn't exist — in that
-        # case the pipeline falls back to the sell-optimizer's native timing
-        # (argmax of forecast horizon). Keyed by (mandi_id, commodity_id).
+        # DFL policy booster: lazy-loaded on first _step_optimize call.
+        # Stays None if lightgbm isn't installed or the model file doesn't
+        # exist — in that case the pipeline falls back to the sell-optimizer's
+        # native timing (argmax of forecast horizon).
         self._dfl_booster = None
-        self._dfl_actions: dict[tuple[str, str], dict] = {}
 
         # Token tracking
         self._extraction_tokens: int = 0
@@ -692,7 +691,7 @@ class MarketIntelligencePipeline:
         # then attach to each farmer's rec based on their chosen market.
         # Graceful fallback: if lightgbm or the model file aren't available
         # we just skip — the sell optimizer's native timing still runs.
-        self._dfl_actions = self._compute_dfl_actions()
+        dfl_actions = self._compute_dfl_actions()
 
         try:
             for farmer in SAMPLE_FARMERS:
@@ -730,7 +729,7 @@ class MarketIntelligencePipeline:
                 # Attach DFL timing action for this farmer's chosen market.
                 best = rec_dict.get("best_option") or {}
                 dfl_key = (best.get("mandi_id", ""), farmer.primary_commodity)
-                rec_dict["dfl"] = self._dfl_actions.get(
+                rec_dict["dfl"] = dfl_actions.get(
                     dfl_key,
                     {"action": None, "confidence": None, "probabilities": None, "source": "unavailable"},
                 )
@@ -756,7 +755,7 @@ class MarketIntelligencePipeline:
                     "farmers_optimized": len(self._sell_recommendations),
                     "total_options_computed": total_options,
                     "dpi_profiles_used": dpi_hits,
-                    "dfl_actions_computed": len(self._dfl_actions),
+                    "dfl_actions_computed": len(dfl_actions),
                     "dfl_actions_applied": dfl_used,
                 },
             )
@@ -934,13 +933,10 @@ class MarketIntelligencePipeline:
                     errors=["No sell recommendations to deliver"],
                 )
 
-            # Build farmer dicts for the delivery module. Default phone
-            # prefix + language come from the active region (see
-            # REGION_CONFIG in src.recommendation_agent) so Kenya runs
-            # don't leak India placeholders.
-            from src.recommendation_agent import _ACTIVE_REGION_CONFIG
-            region_phone_default = f"{_ACTIVE_REGION_CONFIG['phone_country_code']}0000000000"
-            region_lang_default = _ACTIVE_REGION_CONFIG["local_language_code"]
+            from src.recommendation_agent import REGION_CONFIG
+            region_cfg = REGION_CONFIG[REGION]
+            region_phone_default = f"{region_cfg['phone_country_code']}0000000000"
+            region_lang_default = region_cfg["local_language_code"]
             farmers = [
                 {
                     "farmer_id": f.farmer_id,

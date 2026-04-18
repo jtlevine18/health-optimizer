@@ -12,27 +12,17 @@ test_eval_pipeline.py) so each region gets a clean module cache.
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
-import sys
-
-import pytest
-
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+from tests._subprocess_driver import run_driver
 
 
 _REC_DRIVER = r"""
 import asyncio
 import json
-import os
 import sys
 
 sys.path.insert(0, __REPO_ROOT__)
 
 from src.pipeline import MarketIntelligencePipeline
-
-os.environ.pop("ANTHROPIC_API_KEY", None)
 
 
 async def _run():
@@ -66,33 +56,9 @@ print("__PIPELINE_RESULT_END__")
 """
 
 
-def _run_pipeline(region: str) -> dict:
-    env = os.environ.copy()
-    env["MARKET_INTEL_REGION"] = region
-    env["MARKET_INTEL_DEMO_MODE"] = "1"
-    env.pop("ANTHROPIC_API_KEY", None)
-
-    driver = _REC_DRIVER.replace("__REPO_ROOT__", repr(REPO_ROOT))
-    proc = subprocess.run(
-        [sys.executable, "-c", driver],
-        env=env, cwd=REPO_ROOT, capture_output=True, text=True, timeout=600,
-    )
-    if proc.returncode != 0:
-        raise AssertionError(
-            f"Pipeline subprocess failed for region={region}:\n"
-            f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
-        )
-    start = proc.stdout.find("__PIPELINE_RESULT_BEGIN__")
-    end = proc.stdout.find("__PIPELINE_RESULT_END__")
-    if start < 0 or end < 0:
-        raise AssertionError(f"Missing sentinels in subprocess output:\n{proc.stdout}")
-    payload = proc.stdout[start + len("__PIPELINE_RESULT_BEGIN__"):end].strip()
-    return json.loads(payload)
-
-
 def test_kenya_recommendation_has_swahili():
     """Under Kenya, every farmer recommendation carries local_language_code='sw'."""
-    out = _run_pipeline("kenya")
+    out = run_driver("kenya", _REC_DRIVER)
     assert out["status"] in ("ok", "partial")
     recs = out["recommendations"]
     assert recs, "Kenya pipeline produced no recommendations"
@@ -109,7 +75,7 @@ def test_kenya_recommendation_has_swahili():
 
 def test_india_recommendation_has_tamil():
     """Under India, every farmer recommendation carries local_language_code='ta'."""
-    out = _run_pipeline("india")
+    out = run_driver("india", _REC_DRIVER)
     assert out["status"] in ("ok", "partial")
     recs = out["recommendations"]
     assert recs, "India pipeline produced no recommendations"

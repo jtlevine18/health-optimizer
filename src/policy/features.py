@@ -231,13 +231,13 @@ def build_dp_features(
     mandi = _get(dp, "mandi", "") or ""
     decision_date = _to_date(_get(dp, "decision_date"))
     spot = _as_float(_get(dp, "spot_price_rs_per_quintal"), 0.0)
+    hist_dated = _history_prices(history)
     # Defensive: a price of 0 breaks log-returns downstream. If we get it,
     # fall back to whatever the most recent history price was, else 1.0.
     if spot <= 0:
-        hist = _history_prices(history)
-        spot = hist[-1][1] if hist else 1.0
+        spot = hist_dated[-1][1] if hist_dated else 1.0
 
-    hist_prices = [p for _, p in _history_prices(history)]
+    hist_prices = [p for _, p in hist_dated]
     # Include the spot as the "current" observation for rolling stats.
     prices_with_spot = hist_prices + [spot]
 
