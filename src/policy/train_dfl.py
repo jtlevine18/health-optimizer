@@ -401,7 +401,7 @@ def main() -> int:
     parser.add_argument("--n-estimators", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=0.05)
     parser.add_argument("--num-leaves", type=int, default=31)
-    parser.add_argument("--model-name", default="dfl_v1",
+    parser.add_argument("--model-name", default="dfl_v2",
                         help="Output filename stem: produces {stem}.lgbm.txt + {stem}_report.json")
     parser.add_argument("--skip-cv", action="store_true",
                         help="Skip leave-one-event-out CV (useful for quick smoke runs).")

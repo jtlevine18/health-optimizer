@@ -843,7 +843,7 @@ class MarketIntelligencePipeline:
                         "action": action,
                         "confidence": round(confidence, 4),
                         "probabilities": {k: round(v, 4) for k, v in probs.items()},
-                        "source": "dfl_v1",
+                        "source": "dfl_v2",
                     }
                 except Exception as exc:
                     logger.debug("DFL prediction failed for %s/%s: %s", mid, cid, exc)

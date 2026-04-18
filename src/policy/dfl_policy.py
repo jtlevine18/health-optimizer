@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 # (see ACTIONS in train_dfl.py).
 ACTION_LABELS: tuple[str, ...] = ("sell_now", "hold_7d", "hold_14d", "hold_30d")
 
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "models" / "dfl_v1.lgbm.txt"
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "models" / "dfl_v2.lgbm.txt"
 
 
 def load_model(path: str | Path | None = None) -> lgb.Booster:
