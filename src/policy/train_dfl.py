@@ -61,7 +61,30 @@ IDX_TO_ACTION: tuple[str, ...] = tuple(a.value for a in ACTIONS)
 
 PANEL_ROOT = BENCH_ROOT / "data" / "benchmark" / "market_intelligence" / "panels"
 MODEL_DIR = Path(__file__).resolve().parent / "models"
+CHRONOS_CACHE_PATH = MODEL_DIR / "chronos_cache_v2.jsonl"
 DEFAULT_PANELS = ("kenya_maize_daily_v0_1", "india_pulses_v0_3")
+
+
+def _load_chronos_cache(path: Path = CHRONOS_CACHE_PATH) -> dict[str, dict[int, dict[str, float]]]:
+    """Load precomputed Chronos quantiles keyed by dp_id.
+
+    Cache row shape: {"dp_id": str, "quantiles": {"7": {q10,q50,q90}, "14": ..., "30": ...}}.
+    Empty dict when cache is absent — training falls back to `_cheap_forecast`.
+    """
+    if not path.exists():
+        return {}
+    out: dict[str, dict[int, dict[str, float]]] = {}
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+                out[row["dp_id"]] = {int(h): q for h, q in row["quantiles"].items()}
+            except (ValueError, KeyError):
+                continue
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +206,9 @@ def _build_dataset(panels: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarra
     w: list[float] = []
     meta: list[dict] = []
 
+    chronos_cache = _load_chronos_cache()
+    print(f"[train] Chronos cache: {len(chronos_cache)} DP entries")
+
     for panel in panels:
         dps, manifest = _load_panel(panel)
         storage = float(manifest.get("storage_rate_per_day", 0.5))
@@ -203,12 +229,15 @@ def _build_dataset(panels: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarra
         med = med if med > 1e-6 else 1.0
         print(f"[train]   {panel}: median regret spread = {med:.2f}")
 
-        # Second pass: features + weights.
+        # Second pass: features + weights. Forecast quantiles come from
+        # the Chronos cache when the dp_id is covered; cheap AR(1) proxy
+        # otherwise (partial cache is safe — just degrades features).
         for dp, label, spread, _rev in pre:
             key = (dp["mandi"], dp["commodity"])
             hist = _history_for_dp(dp, series_index[key])
             spot = float(dp["spot_price_rs_per_quintal"])
-            fc = _cheap_forecast(hist, spot)
+            cached = chronos_cache.get(dp["id"])
+            fc = cached if cached else _cheap_forecast(hist, spot)
             feat = build_dp_features(dp, history=hist, forecast=fc, exogenous=None)
             row = [feat[name] for name in FEATURE_NAMES]
             X_rows.append(row)
@@ -372,6 +401,8 @@ def main() -> int:
     parser.add_argument("--n-estimators", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=0.05)
     parser.add_argument("--num-leaves", type=int, default=31)
+    parser.add_argument("--model-name", default="dfl_v1",
+                        help="Output filename stem: produces {stem}.lgbm.txt + {stem}_report.json")
     parser.add_argument("--skip-cv", action="store_true",
                         help="Skip leave-one-event-out CV (useful for quick smoke runs).")
     args = parser.parse_args()
@@ -416,7 +447,7 @@ def main() -> int:
     feature_importance = [{"name": n, "gain": float(g)} for n, g in imp_pairs]
 
     # Save artifacts.
-    model_path = MODEL_DIR / "dfl_v1.lgbm.txt"
+    model_path = MODEL_DIR / f"{args.model_name}.lgbm.txt"
     final_booster.save_model(str(model_path))
     print(f"[train] Wrote {model_path} ({model_path.stat().st_size / 1024:.1f} KB)")
 
@@ -451,7 +482,7 @@ def main() -> int:
         "training_wall_time_sec": round(time.time() - t0, 2),
         "final_n_trees": final_booster.num_trees(),
     }
-    report_path = MODEL_DIR / "dfl_v1_report.json"
+    report_path = MODEL_DIR / f"{args.model_name}_report.json"
     report_path.write_text(json.dumps(report, indent=2))
     print(f"[train] Wrote {report_path}")
     print(f"[train] Done in {report['training_wall_time_sec']:.1f}s")

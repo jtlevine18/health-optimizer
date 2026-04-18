@@ -1,0 +1,188 @@
+{
+  "trained_at_utc": "2026-04-18T04:10:17.049008Z",
+  "lightgbm_version": "4.6.0",
+  "panel": "kenya_maize_monthly_v0_2",
+  "n_dps": 208,
+  "n_features": 24,
+  "feature_names": [
+    "z_score_30d",
+    "z_score_14d",
+    "return_7d",
+    "return_30d",
+    "realized_vol_14d",
+    "realized_vol_30d",
+    "month",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "seasonal_flag",
+    "forecast_q10_30d",
+    "forecast_q50_30d",
+    "forecast_q90_30d",
+    "forecast_q10_60d",
+    "forecast_q50_60d",
+    "forecast_q90_60d",
+    "forecast_q10_90d",
+    "forecast_q50_90d",
+    "forecast_q90_90d",
+    "rainfall_anomaly_90d",
+    "fx_30d_return_local",
+    "global_price_momentum",
+    "commodity_hash",
+    "region_flag"
+  ],
+  "action_space": "HoldSellMonthlyAction (0/30/60/90 days)",
+  "actions_by_class_index": [
+    "sell_now",
+    "hold_1mo",
+    "hold_2mo",
+    "hold_3mo"
+  ],
+  "class_distribution": [
+    135,
+    33,
+    20,
+    20
+  ],
+  "overall_in_sample": {
+    "hit_rate": 1.0,
+    "mean_regret": 0.0
+  },
+  "per_event_loo": [
+    {
+      "event_id": "mi-kenya-maize-2011-hoa-famine",
+      "n": 37,
+      "hit_rate": 0.5946,
+      "mean_regret": 241.98
+    },
+    {
+      "event_id": "mi-kenya-maize-2017-drought",
+      "n": 45,
+      "hit_rate": 0.7778,
+      "mean_regret": 154.54
+    },
+    {
+      "event_id": "mi-kenya-maize-2022-hoa-drought",
+      "n": 79,
+      "hit_rate": 0.4684,
+      "mean_regret": 633.32
+    },
+    {
+      "event_id": "mi-kenya-maize-2024-el-nino-floods",
+      "n": 9,
+      "hit_rate": 0.8889,
+      "mean_regret": 113.24
+    },
+    {
+      "event_id": "mi-kenya-maize-monthly-2015-el-nino",
+      "n": 27,
+      "hit_rate": 0.8148,
+      "mean_regret": 93.68
+    },
+    {
+      "event_id": "mi-kenya-maize-monthly-2019-srs-failure",
+      "n": 11,
+      "hit_rate": 1.0,
+      "mean_regret": 0.0
+    }
+  ],
+  "feature_importance": [
+    {
+      "name": "month",
+      "gain": 1439.421416162113
+    },
+    {
+      "name": "return_30d",
+      "gain": 1015.635658350162
+    },
+    {
+      "name": "day_of_year_sin",
+      "gain": 853.6855248393181
+    },
+    {
+      "name": "z_score_30d",
+      "gain": 584.3704129038867
+    },
+    {
+      "name": "forecast_q10_30d",
+      "gain": 565.9382543530331
+    },
+    {
+      "name": "return_7d",
+      "gain": 556.3133216217926
+    },
+    {
+      "name": "forecast_q10_60d",
+      "gain": 512.0443216907228
+    },
+    {
+      "name": "forecast_q90_30d",
+      "gain": 467.51522910092007
+    },
+    {
+      "name": "forecast_q50_30d",
+      "gain": 422.3253662934661
+    },
+    {
+      "name": "realized_vol_14d",
+      "gain": 408.2916280655392
+    },
+    {
+      "name": "forecast_q10_90d",
+      "gain": 403.55512241145027
+    },
+    {
+      "name": "forecast_q90_90d",
+      "gain": 387.51684510839
+    },
+    {
+      "name": "forecast_q90_60d",
+      "gain": 355.1203071960064
+    },
+    {
+      "name": "z_score_14d",
+      "gain": 332.55402842888077
+    },
+    {
+      "name": "day_of_year_cos",
+      "gain": 307.3020377484724
+    },
+    {
+      "name": "forecast_q50_90d",
+      "gain": 292.85242340253365
+    },
+    {
+      "name": "forecast_q50_60d",
+      "gain": 229.49631868222932
+    },
+    {
+      "name": "realized_vol_30d",
+      "gain": 151.18724916659787
+    },
+    {
+      "name": "region_flag",
+      "gain": 52.84406873067066
+    },
+    {
+      "name": "seasonal_flag",
+      "gain": 20.95470872112128
+    },
+    {
+      "name": "rainfall_anomaly_90d",
+      "gain": 0.0
+    },
+    {
+      "name": "fx_30d_return_local",
+      "gain": 0.0
+    },
+    {
+      "name": "global_price_momentum",
+      "gain": 0.0
+    },
+    {
+      "name": "commodity_hash",
+      "gain": 0.0
+    }
+  ],
+  "training_wall_time_sec": 1.19,
+  "final_n_trees": 1200
+}
