@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getDataSources, getMandis, getRegion, isRegionMandi } from './_region.js'
+import { getDataSources, getMandis, getRegion, regionMandiSqlPattern } from './_region.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -8,6 +8,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { neon } = await import('@neondatabase/serverless')
     const sql = neon(dbUrl)
     const region = getRegion()
+    const mandiPattern = regionMandiSqlPattern(region)
 
     const runs = await sql`
       SELECT run_id, started_at, status, duration_sec, total_cost_usd,
@@ -21,19 +22,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const successfulRuns = runs.filter((r: any) => r.status === 'ok').length
     const totalCost = runs.reduce((s: number, r: any) => s + (r.total_cost_usd || 0), 0)
 
-    // Count distinct mandi/commodity ids filtered to the active region's
-    // prefix — stops pre-migration India rows from inflating Kenya stats.
-    const mandiRows = await sql`SELECT DISTINCT mandi_id FROM market_prices`
-    const commodityRows = await sql`
-      SELECT DISTINCT mp.commodity_id, mp.mandi_id
-      FROM market_prices mp
+    // Region + 30-day window filter on market_prices so pre-migration
+    // rows stop padding the counts.
+    const mandiRows = await sql`
+      SELECT DISTINCT mandi_id FROM market_prices
+      WHERE mandi_id LIKE ${mandiPattern}
+        AND created_at >= NOW() - INTERVAL '30 days'
     `
-    const mandiCount = (mandiRows as any[]).filter((r) => isRegionMandi(r.mandi_id, region)).length
-    const commoditySet = new Set(
-      (commodityRows as any[])
-        .filter((r) => isRegionMandi(r.mandi_id, region))
-        .map((r) => r.commodity_id)
-    )
+    const commodityRows = await sql`
+      SELECT DISTINCT commodity_id FROM market_prices
+      WHERE mandi_id LIKE ${mandiPattern}
+        AND created_at >= NOW() - INTERVAL '30 days'
+    `
+    const mandiCount = mandiRows.length
+    const commoditySet = new Set((commodityRows as any[]).map((r) => r.commodity_id))
 
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.json({

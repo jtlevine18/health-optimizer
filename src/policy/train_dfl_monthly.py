@@ -56,21 +56,11 @@ CHRONOS_CACHE_PATH = MODEL_DIR / "chronos_cache_monthly_v1.jsonl"
 DEFAULT_PANEL = "kenya_maize_monthly_v0_2"
 
 
+from src.policy.chronos_precompute import load_chronos_cache as _load_chronos_cache_file  # noqa: E402
+
+
 def _load_chronos_cache(path: Path = CHRONOS_CACHE_PATH) -> dict[str, dict[int, dict[str, float]]]:
-    if not path.exists():
-        return {}
-    out: dict[str, dict[int, dict[str, float]]] = {}
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-                out[row["dp_id"]] = {int(h): q for h, q in row["quantiles"].items()}
-            except (ValueError, KeyError):
-                continue
-    return out
+    return _load_chronos_cache_file(path)
 
 
 def _parse_date(s: str) -> date:
@@ -216,29 +206,6 @@ def _train(X, y, w, X_va=None, y_va=None, w_va=None, n_estimators=300, seed=42):
         valid_sets=valid_sets, valid_names=valid_names, callbacks=callbacks,
     )
     return booster
-
-
-def _score(booster, X, y_true, meta, storage_by_panel):
-    probs = booster.predict(X)
-    preds = np.argmax(probs, axis=1)
-    hits = (preds == y_true).astype(float).mean()
-    regrets = []
-    for i, (m, p_idx) in enumerate(zip(meta, preds)):
-        oracle_rev = max(m.get("revenues", {}).values(), default=None)
-        if oracle_rev is None:
-            continue
-    # simpler: compute regret from label metadata on the fly
-    reg = 0.0
-    for i, (m, p_idx) in enumerate(zip(meta, preds)):
-        pred_action = IDX_TO_ACTION[p_idx]
-        best_action = IDX_TO_ACTION[m["label"]]
-        if pred_action == best_action:
-            continue
-        # meta doesn't carry revenues explicitly; recompute from dp_id isn't available here.
-        # Use spread as a pessimistic cap (actual regret <= spread).
-        reg += m.get("spread", 0.0)
-    mean_reg = reg / len(meta) if meta else 0.0
-    return float(hits), mean_reg
 
 
 def main() -> int:

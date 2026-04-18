@@ -89,14 +89,31 @@ export function getMandis(region: Region = getRegion()): MandiDescriptor[] {
   return region === 'kenya' ? KENYA_MANDIS : INDIA_MANDIS
 }
 
+// Region-scoped lookups. No cross-region fallback — a missing entry means
+// the active-region config doesn't know about the id, and we'd rather
+// surface that (by returning the raw id) than mask it with a name from
+// the other region's map.
 export function getMandiName(mandi_id: string, region: Region = getRegion()): string {
   const map = region === 'kenya' ? KENYA_MANDI_NAMES : INDIA_MANDI_NAMES
-  return map[mandi_id] || INDIA_MANDI_NAMES[mandi_id] || KENYA_MANDI_NAMES[mandi_id] || mandi_id
+  return map[mandi_id] || mandi_id
 }
 
 export function getCommodityName(commodity_id: string, region: Region = getRegion()): string {
   const map = region === 'kenya' ? KENYA_COMMODITY_NAMES : INDIA_COMMODITY_NAMES
-  return map[commodity_id] || INDIA_COMMODITY_NAMES[commodity_id] || KENYA_COMMODITY_NAMES[commodity_id] || commodity_id
+  return map[commodity_id] || commodity_id
+}
+
+// SQL LIKE pattern for region-scoped Neon filters. Mandi IDs split cleanly
+// on `MKT-` (Kenya) vs `MND-` (India). Farmer IDs need a follow-up
+// isRegionFarmer() pass in TypeScript because SQL LIKE can't distinguish
+// `FMR-K0001` (Kenya) from `FMR-KUMR` (India's Kumar persona) on a plain
+// prefix — we fetch the LIKE superset and let isRegionFarmer post-filter.
+export function regionMandiSqlPattern(region: Region = getRegion()): string {
+  return region === 'kenya' ? 'MKT-%' : 'MND-%'
+}
+
+export function regionFarmerSqlPattern(region: Region = getRegion()): string {
+  return region === 'kenya' ? 'FMR-K%' : 'FMR-%'
 }
 
 // Geography filters — let endpoints drop stale cross-region rows from Neon.
@@ -107,9 +124,11 @@ export function isRegionMandi(mandi_id: string | null | undefined, region: Regio
 
 export function isRegionFarmer(farmer_id: string | null | undefined, region: Region = getRegion()): boolean {
   if (!farmer_id) return false
-  if (region === 'kenya') return farmer_id.startsWith('FMR-K')
-  // India farmers: any non-Kenya-prefixed (FMR-LKSH, FMR-KUMR, FMR-MEEN, FMR-0001..0097)
-  return farmer_id.startsWith('FMR-') && !farmer_id.startsWith('FMR-K')
+  // Kenya pipeline generates FMR-K0001..FMR-K0100. The India side has
+  // the FMR-KUMR curated farmer which would collide on a plain FMR-K
+  // prefix, so we match the digit immediately after `K`.
+  const isKenya = /^FMR-K\d/.test(farmer_id)
+  return region === 'kenya' ? isKenya : (farmer_id.startsWith('FMR-') && !isKenya)
 }
 
 // Data-source provenance line (shown on /api/pipeline-stats and similar).

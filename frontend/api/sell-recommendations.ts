@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getFeaturedFarmers, getMandiName, getRegion, isRegionFarmer } from './_region.js'
+import { getFeaturedFarmers, getMandiName, getRegion, isRegionFarmer, regionFarmerSqlPattern } from './_region.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -10,15 +10,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = neon(dbUrl)
     const region = getRegion()
     const fallbacks = getFeaturedFarmers(region)
+    const farmerPattern = regionFarmerSqlPattern(region)
 
     const recs = await sql`
       SELECT DISTINCT ON (farmer_id)
         farmer_id, full_data, net_price_rs, best_mandi_id, commodity_id,
         recommendation_text, potential_gain_rs, best_timing, created_at
       FROM sell_recommendations
+      WHERE farmer_id LIKE ${farmerPattern}
       ORDER BY farmer_id, created_at DESC
     `
 
+    // SQL LIKE fetches a superset (can't distinguish FMR-K0001 from FMR-KUMR);
+    // isRegionFarmer() tightens to exact region match.
     const filtered = recs.filter((r: any) => isRegionFarmer(r.farmer_id, region))
 
     const result = filtered.map((r: any) => {

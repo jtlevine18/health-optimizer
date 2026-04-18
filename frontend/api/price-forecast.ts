@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getCommodityName, getMandiName, getRegion, isRegionMandi } from './_region.js'
+import { getCommodityName, getMandiName, getRegion, regionMandiSqlPattern } from './_region.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -9,18 +9,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { neon } = await import('@neondatabase/serverless')
     const sql = neon(dbUrl)
     const region = getRegion()
+    const mandiPattern = regionMandiSqlPattern(region)
 
     const forecasts = await sql`
       SELECT DISTINCT ON (mandi_id, commodity_id, horizon_days)
         run_id, mandi_id, commodity_id, forecast_date, horizon_days,
         predicted_price, ci_lower, ci_upper, model_type, created_at
       FROM price_forecasts
+      WHERE mandi_id LIKE ${mandiPattern}
       ORDER BY mandi_id, commodity_id, horizon_days, created_at DESC
     `
 
     const grouped: Record<string, any> = {}
     for (const f of forecasts) {
-      if (!isRegionMandi(f.mandi_id, region)) continue
       const key = `${f.mandi_id}|${f.commodity_id}`
       if (!grouped[key]) {
         grouped[key] = {

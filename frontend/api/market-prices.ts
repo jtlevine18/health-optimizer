@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getCommodityName, getMandiName, getRegion, isRegionMandi } from './_region.js'
+import { getCommodityName, getMandiName, getRegion, regionMandiSqlPattern } from './_region.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -9,19 +9,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { neon } = await import('@neondatabase/serverless')
     const sql = neon(dbUrl)
     const region = getRegion()
+    const mandiPattern = regionMandiSqlPattern(region)
 
-    // Only the last 14 days so stale rows stop masquerading as current.
+    // Only the last 14 days so stale rows stop masquerading as current;
+    // region-filter on mandi_id prefix pushed into SQL to cut transfer.
     const prices = await sql`
       SELECT DISTINCT ON (mandi_id, commodity_id)
         mandi_id, commodity_id, price_rs, source, date, full_data, created_at
       FROM market_prices
       WHERE created_at >= NOW() - INTERVAL '14 days'
+        AND mandi_id LIKE ${mandiPattern}
       ORDER BY mandi_id, commodity_id, created_at DESC
     `
 
-    const filtered = prices.filter((p: any) => isRegionMandi(p.mandi_id, region))
-
-    const enriched = filtered.map((p: any) => {
+    const enriched = prices.map((p: any) => {
       const mandi_name = getMandiName(p.mandi_id, region)
       const commodity_name = getCommodityName(p.commodity_id, region)
       if (p.full_data && typeof p.full_data === 'object') {

@@ -65,26 +65,12 @@ CHRONOS_CACHE_PATH = MODEL_DIR / "chronos_cache_v2.jsonl"
 DEFAULT_PANELS = ("kenya_maize_daily_v0_1", "india_pulses_v0_3")
 
 
-def _load_chronos_cache(path: Path = CHRONOS_CACHE_PATH) -> dict[str, dict[int, dict[str, float]]]:
-    """Load precomputed Chronos quantiles keyed by dp_id.
+from src.policy.chronos_precompute import load_chronos_cache as _load_chronos_cache_file  # noqa: E402
 
-    Cache row shape: {"dp_id": str, "quantiles": {"7": {q10,q50,q90}, "14": ..., "30": ...}}.
-    Empty dict when cache is absent — training falls back to `_cheap_forecast`.
-    """
-    if not path.exists():
-        return {}
-    out: dict[str, dict[int, dict[str, float]]] = {}
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-                out[row["dp_id"]] = {int(h): q for h, q in row["quantiles"].items()}
-            except (ValueError, KeyError):
-                continue
-    return out
+
+def _load_chronos_cache(path: Path = CHRONOS_CACHE_PATH) -> dict[str, dict[int, dict[str, float]]]:
+    """Thin wrapper over the shared chronos_precompute reader."""
+    return _load_chronos_cache_file(path)
 
 
 # ---------------------------------------------------------------------------

@@ -81,20 +81,30 @@ def _history_for_dp(dp: dict, series: list[tuple[date, float]]) -> list[float]:
     return prior
 
 
-def _read_cache_ids(cache_path: Path) -> set[str]:
-    if not cache_path.exists():
-        return set()
-    seen: set[str] = set()
-    with cache_path.open("r", encoding="utf-8") as fh:
+def load_chronos_cache(path: Path) -> dict[str, dict[int, dict[str, float]]]:
+    """Read the append-only Chronos quantile cache keyed by dp_id.
+
+    Used by train_dfl.py, train_dfl_monthly.py, and the benchmark adapter
+    so all three share a single reader. Missing file -> empty dict.
+    """
+    if not path.exists():
+        return {}
+    out: dict[str, dict[int, dict[str, float]]] = {}
+    with path.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if not line:
                 continue
             try:
-                seen.add(json.loads(line)["dp_id"])
+                row = json.loads(line)
+                out[row["dp_id"]] = {int(h): q for h, q in row["quantiles"].items()}
             except (ValueError, KeyError):
                 continue
-    return seen
+    return out
+
+
+def _read_cache_ids(cache_path: Path) -> set[str]:
+    return set(load_chronos_cache(cache_path).keys())
 
 
 def _pad_series(prices: list[float], length: int) -> np.ndarray:
