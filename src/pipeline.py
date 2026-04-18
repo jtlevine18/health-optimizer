@@ -42,12 +42,60 @@ from src.forecasting.price_model import (
     _extract_price_histories,
 )
 from src.optimizer import optimize_sell, recommendation_to_dict, SellRecommendation, assess_credit_readiness, credit_readiness_to_dict
+from src.policy.features import build_dp_features
 from src.recommendation_agent import RecommendationAgent, FarmerRecommendation
 from src.delivery import deliver_recommendations
 from src.store import store
 from src import db as persistence
 
 logger = logging.getLogger(__name__)
+
+
+def _dfl_forecast_from_pipeline(forecast: dict | None) -> dict[int, dict[str, float]] | None:
+    """Convert the pipeline's flat forecast dict into the DFL feature shape.
+
+    Pipeline stores flat keys: price_7d, price_14d, price_30d, and CI on the
+    7d horizon only (ci_lower_7d, ci_upper_7d). DFL wants per-horizon
+    {7: {"q10", "q50", "q90"}, ...}. For horizons without CI we collapse
+    q10/q90 to q50 (features.py treats this as a tight band, not a vacuum).
+    """
+    if not forecast:
+        return None
+    out: dict[int, dict[str, float]] = {}
+    for horizon in (7, 14, 30):
+        q50 = forecast.get(f"price_{horizon}d")
+        if q50 is None:
+            continue
+        try:
+            q50 = float(q50)
+            q10 = float(forecast.get(f"ci_lower_{horizon}d") or q50)
+            q90 = float(forecast.get(f"ci_upper_{horizon}d") or q50)
+            out[horizon] = {"q10": q10, "q50": q50, "q90": q90}
+        except (TypeError, ValueError):
+            continue
+    return out or None
+
+
+def _recent_rainfall_anomaly(climate_rows: list[dict]) -> float:
+    """Crude 90d rainfall anomaly proxy: (recent 30d sum - prior 60d daily avg) / avg.
+
+    Uses whatever climate data we have; zero when empty. This is a cheap
+    stand-in — good enough for the DFL feature slot since the training-time
+    forecast proxy was also cheap.
+    """
+    if not climate_rows:
+        return 0.0
+    precips = [float(r.get("precip_mm") or 0.0) for r in climate_rows[-90:]]
+    if len(precips) < 30:
+        return 0.0
+    recent = sum(precips[-30:])
+    prior = precips[:-30]
+    if not prior:
+        return 0.0
+    prior_avg_30d = (sum(prior) / len(prior)) * 30
+    if prior_avg_30d <= 0:
+        return 0.0
+    return (recent - prior_avg_30d) / prior_avg_30d
 
 
 # ── Step / Pipeline result dataclasses ───────────────────────────────────
@@ -121,6 +169,12 @@ class MarketIntelligencePipeline:
         self._model_metrics: dict = {}
         self._price_conflicts: list[dict] = []
         self._forecaster: ChronosXGBoostForecaster | None = None
+        # DFL policy: lazy-loaded on first _step_optimize call. Stays None if
+        # lightgbm isn't installed or the model file doesn't exist — in that
+        # case the pipeline falls back to the sell-optimizer's native timing
+        # (argmax of forecast horizon). Keyed by (mandi_id, commodity_id).
+        self._dfl_booster = None
+        self._dfl_actions: dict[tuple[str, str], dict] = {}
 
         # Token tracking
         self._extraction_tokens: int = 0
@@ -634,6 +688,12 @@ class MarketIntelligencePipeline:
 
         dpi_hits = 0
 
+        # DFL policy: predict hold/sell action per (mandi, commodity) once,
+        # then attach to each farmer's rec based on their chosen market.
+        # Graceful fallback: if lightgbm or the model file aren't available
+        # we just skip — the sell optimizer's native timing still runs.
+        self._dfl_actions = self._compute_dfl_actions()
+
         try:
             for farmer in SAMPLE_FARMERS:
                 rec = optimize_sell(
@@ -667,6 +727,14 @@ class MarketIntelligencePipeline:
                 )
                 rec_dict["credit_readiness"] = credit_readiness_to_dict(credit)
 
+                # Attach DFL timing action for this farmer's chosen market.
+                best = rec_dict.get("best_option") or {}
+                dfl_key = (best.get("mandi_id", ""), farmer.primary_commodity)
+                rec_dict["dfl"] = self._dfl_actions.get(
+                    dfl_key,
+                    {"action": None, "confidence": None, "probabilities": None, "source": "unavailable"},
+                )
+
                 self._sell_recommendations[farmer.farmer_id] = rec_dict
                 self._sell_recommendations[farmer.farmer_id]["farmer_id"] = farmer.farmer_id
                 self._sell_recommendations[farmer.farmer_id]["farmer_name"] = farmer.name
@@ -676,6 +744,11 @@ class MarketIntelligencePipeline:
                 for v in self._sell_recommendations.values()
             )
 
+            dfl_used = sum(
+                1 for rec in self._sell_recommendations.values()
+                if rec.get("dfl", {}).get("action") is not None
+            )
+
             return StepResult(
                 step="optimize", status="ok", duration_s=time.time() - t0,
                 records_processed=len(self._sell_recommendations),
@@ -683,6 +756,8 @@ class MarketIntelligencePipeline:
                     "farmers_optimized": len(self._sell_recommendations),
                     "total_options_computed": total_options,
                     "dpi_profiles_used": dpi_hits,
+                    "dfl_actions_computed": len(self._dfl_actions),
+                    "dfl_actions_applied": dfl_used,
                 },
             )
         except Exception as e:
@@ -691,6 +766,94 @@ class MarketIntelligencePipeline:
                 step="optimize", status="failed", duration_s=time.time() - t0,
                 errors=[str(e)],
             )
+
+    def _compute_dfl_actions(self) -> dict[tuple[str, str], dict]:
+        """Run the DFL hold/sell policy for every (mandi, commodity) with data.
+
+        Graceful fallback: if lightgbm or the model file aren't available,
+        returns an empty dict (and the pipeline uses the sell optimizer's
+        native timing instead). This is intentional — the production app
+        must boot and run even without the DFL artifact in place.
+        """
+        # Lazy import + lazy model load so missing lightgbm doesn't break
+        # the pipeline module at import time.
+        try:
+            from src.policy.dfl_policy import (
+                load_model,
+                predict_action_with_confidence,
+            )
+        except ImportError as exc:
+            logger.warning("DFL: lightgbm/policy not importable, skipping: %s", exc)
+            return {}
+
+        if self._dfl_booster is None:
+            try:
+                self._dfl_booster = load_model()
+            except FileNotFoundError as exc:
+                logger.warning("DFL: model artifact missing, skipping: %s", exc)
+                return {}
+            except Exception as exc:
+                logger.warning("DFL: model load failed, skipping: %s", exc)
+                return {}
+
+        actions: dict[tuple[str, str], dict] = {}
+        for mandi in MANDIS:
+            mid = mandi.mandi_id
+            reconciled = self._reconciled_data.get(mid, {})
+            forecasts = self._forecast_by_mandi.get(mid, {})
+
+            # Build the per-mandi price history once (daily modal prices) so
+            # every commodity at that mandi shares the same history lookup.
+            climate_rows = self._climate.get(mid, [])
+            rainfall_anom_90d = _recent_rainfall_anomaly(climate_rows)
+
+            for commodity in COMMODITIES:
+                cid = commodity["id"]
+                price_info = reconciled.get(cid)
+                spot = (price_info or {}).get("price_rs")
+                if not spot:
+                    continue
+
+                # History: price records for this commodity at this mandi.
+                history = [
+                    {"date": r.date, "modal_price_rs": r.modal_price_rs}
+                    for r in self._agmarknet_prices.get(mid, [])
+                    if r.commodity_id == cid and r.modal_price_rs
+                ]
+
+                forecast_dict = _dfl_forecast_from_pipeline(forecasts.get(cid))
+
+                dp = {
+                    "mandi": mandi.name,
+                    "commodity": commodity.get("name", cid),
+                    "decision_date": date.today().isoformat(),
+                    "spot_price_rs_per_quintal": float(spot),
+                }
+
+                try:
+                    features = build_dp_features(
+                        dp,
+                        history=history,
+                        forecast=forecast_dict,
+                        exogenous={"rainfall_anomaly_90d": rainfall_anom_90d},
+                    )
+                    action, confidence, probs = predict_action_with_confidence(
+                        features, self._dfl_booster,
+                    )
+                    actions[(mid, cid)] = {
+                        "action": action,
+                        "confidence": round(confidence, 4),
+                        "probabilities": {k: round(v, 4) for k, v in probs.items()},
+                        "source": "dfl_v1",
+                    }
+                except Exception as exc:
+                    logger.debug("DFL prediction failed for %s/%s: %s", mid, cid, exc)
+
+        logger.info(
+            "DFL: produced %d actions across %d mandis x %d commodities",
+            len(actions), len(MANDIS), len(COMMODITIES),
+        )
+        return actions
 
     # ── Step 6: RECOMMEND ────────────────────────────────────────────────
 

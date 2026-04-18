@@ -1,0 +1,303 @@
+{
+  "trained_at_utc": "2026-04-17T23:54:30.419546Z",
+  "lightgbm_version": "4.6.0",
+  "panels": [
+    "kenya_maize_daily_v0_1",
+    "india_pulses_v0_3"
+  ],
+  "n_dps": 20330,
+  "n_features": 24,
+  "feature_names": [
+    "z_score_30d",
+    "z_score_14d",
+    "return_7d",
+    "return_30d",
+    "realized_vol_14d",
+    "realized_vol_30d",
+    "month",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "seasonal_flag",
+    "forecast_q10_7d",
+    "forecast_q50_7d",
+    "forecast_q90_7d",
+    "forecast_q10_14d",
+    "forecast_q50_14d",
+    "forecast_q90_14d",
+    "forecast_q10_30d",
+    "forecast_q50_30d",
+    "forecast_q90_30d",
+    "rainfall_anomaly_90d",
+    "fx_30d_return_local",
+    "global_price_momentum",
+    "commodity_hash",
+    "region_flag"
+  ],
+  "hyperparameters": {
+    "objective": "multiclass",
+    "num_class": 4,
+    "n_estimators": 500,
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "min_data_in_leaf": 20,
+    "feature_fraction": 0.9,
+    "bagging_fraction": 0.8,
+    "bagging_freq": 5
+  },
+  "class_distribution": [
+    6278,
+    3526,
+    3641,
+    6885
+  ],
+  "class_labels": [
+    "sell_now",
+    "hold_7d",
+    "hold_14d",
+    "hold_30d"
+  ],
+  "actions_by_class_index": [
+    "sell_now",
+    "hold_7d",
+    "hold_14d",
+    "hold_30d"
+  ],
+  "overall": {
+    "hit_rate": 0.864,
+    "mean_regret": 33.5991
+  },
+  "per_panel": {
+    "kenya_maize_daily_v0_1": {
+      "n_dps": 3957,
+      "hit_rate": 0.9032,
+      "mean_regret": 44.824
+    },
+    "india_pulses_v0_3": {
+      "n_dps": 16373,
+      "hit_rate": 0.8545,
+      "mean_regret": 30.8863
+    }
+  },
+  "per_event_loo": [
+    {
+      "event_id": "mi-kenya-maize-2022-hoa-drought",
+      "n_dps": 3021,
+      "panels": [
+        "kenya_maize_daily_v0_1"
+      ],
+      "hit_rate": 0.4403,
+      "mean_regret": 7291.6902,
+      "best_iteration": 7
+    },
+    {
+      "event_id": "mi-kenya-maize-2024-el-nino-floods",
+      "n_dps": 936,
+      "panels": [
+        "kenya_maize_daily_v0_1"
+      ],
+      "hit_rate": 0.2788,
+      "mean_regret": 17630.639,
+      "best_iteration": 10
+    },
+    {
+      "event_id": "mi-v0_1-masur-mad-20160311",
+      "n_dps": 1962,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.2757,
+      "mean_regret": 311.7153,
+      "best_iteration": 1
+    },
+    {
+      "event_id": "mi-v0_1-masur-mad-20170317",
+      "n_dps": 3091,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.23,
+      "mean_regret": 431.3208,
+      "best_iteration": 1
+    },
+    {
+      "event_id": "mi-v0_1-moong-mah-20150904",
+      "n_dps": 491,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.5682,
+      "mean_regret": 168.9996,
+      "best_iteration": 52
+    },
+    {
+      "event_id": "mi-v0_1-moong-mah-20151003",
+      "n_dps": 1199,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.6631,
+      "mean_regret": 114.0223,
+      "best_iteration": 95
+    },
+    {
+      "event_id": "mi-v0_1-moong-raj-20150921",
+      "n_dps": 2398,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.623,
+      "mean_regret": 154.8038,
+      "best_iteration": 313
+    },
+    {
+      "event_id": "mi-v0_1-tur-mah-20150210",
+      "n_dps": 1630,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.484,
+      "mean_regret": 115.4014,
+      "best_iteration": 34
+    },
+    {
+      "event_id": "mi-v0_1-tur-mah-20150816",
+      "n_dps": 1003,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.5374,
+      "mean_regret": 448.2159,
+      "best_iteration": 71
+    },
+    {
+      "event_id": "mi-v0_1-urad-mad-20141030",
+      "n_dps": 2145,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.4881,
+      "mean_regret": 188.4086,
+      "best_iteration": 17
+    },
+    {
+      "event_id": "mi-v0_1-urad-mad-20150924",
+      "n_dps": 1752,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.5993,
+      "mean_regret": 253.2199,
+      "best_iteration": 160
+    },
+    {
+      "event_id": "mi-v0_1-urad-raj-20150928",
+      "n_dps": 702,
+      "panels": [
+        "india_pulses_v0_3"
+      ],
+      "hit_rate": 0.6823,
+      "mean_regret": 132.1821,
+      "best_iteration": 236
+    }
+  ],
+  "feature_importance": [
+    {
+      "name": "forecast_q10_7d",
+      "gain": 453496.26765573025
+    },
+    {
+      "name": "day_of_year_cos",
+      "gain": 372554.36887443066
+    },
+    {
+      "name": "day_of_year_sin",
+      "gain": 367459.21702861786
+    },
+    {
+      "name": "return_30d",
+      "gain": 236514.12446022034
+    },
+    {
+      "name": "return_7d",
+      "gain": 227039.54690027237
+    },
+    {
+      "name": "forecast_q90_14d",
+      "gain": 162952.05186760426
+    },
+    {
+      "name": "z_score_30d",
+      "gain": 137100.75464606285
+    },
+    {
+      "name": "z_score_14d",
+      "gain": 121321.69989347458
+    },
+    {
+      "name": "realized_vol_14d",
+      "gain": 106732.48021352291
+    },
+    {
+      "name": "forecast_q50_7d",
+      "gain": 96866.19219565392
+    },
+    {
+      "name": "forecast_q90_7d",
+      "gain": 92658.17627453804
+    },
+    {
+      "name": "realized_vol_30d",
+      "gain": 79568.74062097073
+    },
+    {
+      "name": "forecast_q10_14d",
+      "gain": 77532.35094726086
+    },
+    {
+      "name": "forecast_q50_30d",
+      "gain": 68503.77458524704
+    },
+    {
+      "name": "month",
+      "gain": 67744.2553230524
+    },
+    {
+      "name": "forecast_q10_30d",
+      "gain": 67725.09418106079
+    },
+    {
+      "name": "commodity_hash",
+      "gain": 65473.92928755283
+    },
+    {
+      "name": "forecast_q50_14d",
+      "gain": 58018.06806910038
+    },
+    {
+      "name": "forecast_q90_30d",
+      "gain": 56000.033334732056
+    },
+    {
+      "name": "seasonal_flag",
+      "gain": 36007.935431718826
+    },
+    {
+      "name": "region_flag",
+      "gain": 2689.124571800232
+    },
+    {
+      "name": "rainfall_anomaly_90d",
+      "gain": 0.0
+    },
+    {
+      "name": "fx_30d_return_local",
+      "gain": 0.0
+    },
+    {
+      "name": "global_price_momentum",
+      "gain": 0.0
+    }
+  ],
+  "training_wall_time_sec": 24.0,
+  "final_n_trees": 2000
+}

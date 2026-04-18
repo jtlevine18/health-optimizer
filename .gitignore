@@ -8,6 +8,12 @@ __pycache__/
 *.egg-info/
 .DS_Store
 models/*.joblib
+# Policy module: ignore intermediate artifacts but keep final DFL model + report.
+src/policy/models/*.pkl
+src/policy/models/*.joblib
+src/policy/models/*.bin
+!src/policy/models/dfl_v1.lgbm.txt
+!src/policy/models/dfl_v1_report.json
 .ruff_cache/
 .pytest_cache/
 scheduler_state.json
