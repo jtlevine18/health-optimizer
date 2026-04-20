@@ -510,22 +510,22 @@ function PipelineHero() {
 
       <div style={{ height: '24px' }} />
 
-      {/* Mobile: 2-col pipeline (left) + output (right) with body inline on active card */}
-      <div className="md:hidden grid grid-cols-[1fr_1fr] gap-3 items-start relative">
-        <div
-          className="absolute z-0"
-          style={{
-            top: '6px',
-            bottom: '6px',
-            left: '5.5px',
-            width: '1px',
-            background: '#e8e5e1',
-            transform: mounted ? 'scaleY(1)' : 'scaleY(0)',
-            transformOrigin: 'top center',
-            transition: 'transform 800ms ease-out',
-          }}
-        />
-        <div className="flex flex-col gap-4">
+      {/* Mobile: 2-col — pipeline timeline on left, description + output on right */}
+      <div className="md:hidden grid grid-cols-[1fr_1fr] gap-4 items-start">
+        <div className="relative flex flex-col gap-4">
+          <div
+            className="absolute z-0"
+            style={{
+              top: '6px',
+              bottom: '6px',
+              left: '5.5px',
+              width: '1px',
+              background: '#e8e5e1',
+              transform: mounted ? 'scaleY(1)' : 'scaleY(0)',
+              transformOrigin: 'top center',
+              transition: 'transform 800ms ease-out',
+            }}
+          />
           {heroSteps.map((s, i) => {
             const isActive = i === selected
             return (
@@ -562,7 +562,7 @@ function PipelineHero() {
                   <div
                     style={{
                       fontFamily: '"Source Serif 4", Georgia, serif',
-                      fontSize: '12px',
+                      fontSize: '11px',
                       color: '#8d909e',
                       fontVariantNumeric: 'tabular-nums',
                     }}
@@ -572,8 +572,8 @@ function PipelineHero() {
                   <div
                     style={{
                       fontFamily: '"Source Serif 4", Georgia, serif',
-                      fontSize: '17px',
-                      lineHeight: '22px',
+                      fontSize: '16px',
+                      lineHeight: '20px',
                       color: isActive ? '#1b1e2d' : '#606373',
                       letterSpacing: '-0.005em',
                     }}
@@ -588,14 +588,29 @@ function PipelineHero() {
                       color: isActive ? '#606373' : '#8d909e',
                     }}
                   >
-                    {isActive ? s.body : s.short}
+                    {s.short}
                   </div>
                 </div>
               </button>
             )
           })}
         </div>
-        <div className="sticky top-4">
+        <div key={step.num} className="animate-fade-in flex flex-col gap-3">
+          <div>
+            <div className="eyebrow" style={{ fontSize: '10px', marginBottom: '4px' }}>
+              Step {String(step.num).padStart(2, '0')} · {step.name}
+            </div>
+            <p
+              style={{
+                fontFamily: '"Source Serif 4", Georgia, serif',
+                fontSize: '12px',
+                lineHeight: 1.5,
+                color: '#1b1e2d',
+              }}
+            >
+              {step.body}
+            </p>
+          </div>
           <div
             style={{
               backgroundColor: '#fcfaf7',
@@ -603,7 +618,6 @@ function PipelineHero() {
               borderLeft: '2px solid #446b26',
               borderRadius: '4px',
               padding: '12px 14px',
-              maxHeight: 'calc(100vh - 100px)',
               overflow: 'hidden',
             }}
           >
