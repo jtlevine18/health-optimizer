@@ -630,7 +630,6 @@ function PipelineHero() {
 
       <div style={{ height: '24px' }} />
 
-      {/* Mobile: 2-col — pipeline timeline on left, description + output on right */}
       <style>{`
         @keyframes pulse-dot {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -785,7 +784,6 @@ function PipelineHero() {
         </div>
       </div>
 
-      {/* Desktop: horizontal step row */}
       <div className="hidden md:grid md:grid-cols-5 gap-2 relative">
         <div
           className="absolute z-0"
@@ -876,10 +874,9 @@ function PipelineHero() {
         })}
       </div>
 
-      {/* Desktop: detail + output panel */}
       <div
         key={step.num}
-        className="animate-fade-in hidden md:grid md:[grid-template-columns:minmax(0,1fr)_minmax(0,1.1fr)]"
+        className="animate-fade-in hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]"
         style={{
           marginTop: '24px',
           paddingTop: '20px',
