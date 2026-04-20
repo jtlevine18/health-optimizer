@@ -2,7 +2,7 @@
 Digital Public Infrastructure (DPI) integration for Market Intelligence.
 
 Exposes the three India DPI services that actually matter for the
-sell-timing + credit readiness product:
+sell-timing + credit readiness module:
 
   - Aadhaar eKYC         -> identity
   - Land Records         -> crop/acreage verification

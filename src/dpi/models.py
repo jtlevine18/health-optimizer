@@ -3,7 +3,7 @@ Dataclasses mirroring Indian Digital Public Infrastructure schemas.
 
 Scope is deliberately narrower than Weather AI 2's DPI subsystem: we only
 model the three services that affect Market Intelligence's credit
-readiness product.
+readiness module.
 
   - AadhaarProfile  -- identity + district for KYC and language
   - LandRecord      -- registered crops + area for verification

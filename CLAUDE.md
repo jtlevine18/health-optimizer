@@ -1,8 +1,8 @@
 # Market Intelligence Agent
 
-AI-powered post-harvest market timing and routing for Tamil Nadu smallholder farmers. Acts as an agent working FOR the farmer — scrapes conflicting government price data, reconciles discrepancies, forecasts prices, tells her when/where to sell, and assesses whether she should seek credit.
+AI-powered post-harvest market timing and routing for smallholder maize farmers in Kenya (default region; the pipeline is built to be forked and adapted — see REBUILD.md). Acts as an agent working FOR the farmer — pulls conflicting wholesale price data, reconciles discrepancies, forecasts prices, tells her when/where to sell, and assesses whether she should seek credit.
 
-Part of Jeff Levine's portfolio: Weather AI tells her what to plant, Market Intelligence tells her when to sell and whether to borrow.
+Part of Jeff Levine's portfolio: Market Intelligence tells the farmer when to sell and whether to borrow. Kenya is the default deployment (KAMIS + WFP VAM data, 111 markets across 20 counties); Tamil Nadu lives on as a secondary configuration.
 
 ## Architecture
 
