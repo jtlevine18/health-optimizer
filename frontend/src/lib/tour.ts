@@ -219,7 +219,7 @@ export const tourStyles = {
   tooltip: {
     borderRadius: 10,
     padding: '20px 22px',
-    maxWidth: 400,
+    maxWidth: 'min(400px, calc(100vw - 32px))',
     fontFamily: '"DM Sans", system-ui, sans-serif',
     fontSize: '0.88rem',
     lineHeight: 1.6,

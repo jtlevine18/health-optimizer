@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Routes, Route, useNavigate } from 'react-router-dom'
 import Joyride, { type CallBackProps, STATUS, EVENTS, ACTIONS } from 'react-joyride'
+import { Menu } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import MarketPrices from './pages/MarketPrices'
 import Forecast from './pages/Forecast'
@@ -40,6 +41,7 @@ function waitForTourTarget(tourSteps: Step[], stepIdx: number, timeoutMs = 3000)
 export default function App() {
   const [runTour, setRunTour] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
   const region = useRegion()
   const tourSteps = tourStepsForRegion(region)
@@ -90,10 +92,23 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen" style={{ background: '#ffffff' }}>
-      <Sidebar />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <div className="flex-1 ml-56 flex flex-col">
-        <main className="flex-1 px-6 sm:px-10 lg:px-14 pt-16 pb-16" style={{ maxWidth: '1180px' }}>
+      <div className="flex-1 lg:ml-56 flex flex-col min-w-0">
+        <header
+          className="flex items-center h-12 px-4 lg:hidden"
+          style={{ background: '#ffffff' }}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open navigation menu"
+            className="p-2 -ml-2"
+            style={{ color: '#606373', background: 'none', border: 'none' }}
+          >
+            <Menu size={20} />
+          </button>
+        </header>
+        <main className="flex-1 px-4 sm:px-8 lg:px-14 pt-6 lg:pt-16 pb-16" style={{ maxWidth: '1180px' }}>
           <Routes>
             <Route path="/" element={<MarketPrices />} />
             <Route path="/forecast" element={<Forecast />} />

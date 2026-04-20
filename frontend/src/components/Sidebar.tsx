@@ -6,6 +6,7 @@ import {
   Coins,
   Settings,
   FileText,
+  X,
 } from 'lucide-react'
 import { usePipelineRuns } from '../lib/api'
 import { useRegion, useRegionCopy } from '../lib/region'
@@ -23,7 +24,12 @@ function buildNavItems(region: 'india' | 'kenya') {
   ]
 }
 
-export default function Sidebar() {
+interface Props {
+  open: boolean
+  onClose: () => void
+}
+
+export default function Sidebar({ open, onClose }: Props) {
   const { data: runsData } = usePipelineRuns()
   const region = useRegion()
   const regionCopy = useRegionCopy()
@@ -34,13 +40,27 @@ export default function Sidebar() {
     region === 'kenya' ? `Live · ${regionCopy.primaryDataSource} daily` : 'Live · Agmarknet data.gov.in'
 
   return (
-    <aside
-      className="fixed top-0 left-0 z-50 h-full w-56 flex flex-col"
-      style={{ background: '#1b1e2d' }}
-    >
+    <>
+      {open && (
+        <div
+          className="fixed inset-0 z-40 lg:hidden"
+          style={{ background: 'rgba(27, 30, 45, 0.4)' }}
+          onClick={onClose}
+        />
+      )}
+
+      <aside
+        className={`
+          fixed top-0 left-0 z-50 h-full w-56
+          flex flex-col transition-transform duration-200 ease-in-out
+          lg:translate-x-0
+          ${open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+        style={{ background: '#1b1e2d' }}
+      >
       {/* Brand */}
       <div
-        className="flex items-center h-16 px-5"
+        className="flex items-center justify-between h-16 px-5"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
         <Link to="/" className="flex items-baseline gap-2 no-underline">
@@ -56,6 +76,14 @@ export default function Sidebar() {
             Crop pricing agent
           </span>
         </Link>
+        <button
+          onClick={onClose}
+          aria-label="Close navigation menu"
+          className="lg:hidden p-1"
+          style={{ color: '#8d909e', background: 'none', border: 'none' }}
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -66,6 +94,7 @@ export default function Sidebar() {
             to={to}
             end={to === '/'}
             data-tour={tourId}
+            onClick={onClose}
             className="sidebar-link"
           >
             <Icon size={16} style={{ flexShrink: 0 }} />
@@ -102,6 +131,8 @@ export default function Sidebar() {
         Farmer personas are simulated
       </div>
 
+      </aside>
+
       <style>{`
         .sidebar-link {
           display: flex;
@@ -124,6 +155,6 @@ export default function Sidebar() {
           border-left-color: #446b26;
         }
       `}</style>
-    </aside>
+    </>
   )
 }

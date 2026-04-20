@@ -658,11 +658,10 @@ export default function SellOptimizer() {
                           : '#c71f48'
                     return (
                       <div
+                        className="grid grid-cols-1 md:grid-cols-[1fr_auto]"
                         style={{
                           borderLeft: `2px solid ${color}`,
                           paddingLeft: '20px',
-                          display: 'grid',
-                          gridTemplateColumns: '1fr auto',
                           columnGap: '48px',
                           rowGap: '20px',
                         }}
@@ -705,11 +704,9 @@ export default function SellOptimizer() {
                         </div>
                         {(cr.strengths.length > 0 || cr.risks.length > 0) && (
                           <div
+                            className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8"
                             style={{
                               gridColumn: '1 / -1',
-                              display: 'grid',
-                              gridTemplateColumns: '1fr 1fr',
-                              gap: '32px',
                               borderTop: '1px solid #e8e5e1',
                               paddingTop: '16px',
                             }}

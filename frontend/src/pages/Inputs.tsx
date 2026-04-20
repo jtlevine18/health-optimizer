@@ -186,11 +186,8 @@ export default function Inputs() {
                 <div
                   data-tour="inputs-reconciled"
                   key={activeKey ?? 'default'}
-                  className="animate-tab-enter"
+                  className="animate-tab-enter grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12"
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '48px',
                     borderTop: '1px solid #e8e5e1',
                     paddingTop: '28px',
                   }}

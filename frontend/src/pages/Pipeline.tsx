@@ -121,10 +121,8 @@ function HowItWorksSection() {
   return (
     <div style={{ marginBottom: '24px' }}>
       <div
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-7"
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-          gap: '28px',
           borderTop: '1px solid #e8e5e1',
           paddingTop: '18px',
         }}
