@@ -125,7 +125,7 @@ function ExploreLink({ to, label }: { to: string; label: string }) {
   )
 }
 
-function StepOutput({ outputType }: { outputType: HeroOutputType }) {
+function StepOutput({ outputType, compact = false }: { outputType: HeroOutputType, compact?: boolean }) {
   const prices = useMarketPrices()
   const forecasts = usePriceForecasts()
   const conflicts = usePriceConflicts()
@@ -139,6 +139,126 @@ function StepOutput({ outputType }: { outputType: HeroOutputType }) {
     fontSize: '13px',
     lineHeight: 1.6,
     color: '#606373',
+  }
+
+  // Compact (mobile) — one big stat per card
+  if (compact) {
+    if (outputType === 'readings') {
+      const top = (prices.data?.market_prices ?? [])[0]
+      return (
+        <div style={panelStyle}>
+          <div className="eyebrow" style={{ fontSize: '10px', marginBottom: '6px' }}>
+            <span className="live-dot" /> Latest arrival price
+          </div>
+          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: '13px', color: '#1b1e2d', marginBottom: '2px' }}>
+            {top?.commodity_name ?? '—'} · {top?.mandi_name ?? '—'}
+          </div>
+          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: '22px', color: '#1b1e2d', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+            {top ? formatPrice(top.reconciled_price_rs, region) : '—'}
+          </div>
+          <div style={{ fontSize: '11px', color: '#8d909e', marginTop: '6px' }}>
+            {regionCopy.primaryDataSource} · {region === 'kenya' ? '11:30 EAT' : '11:30 IST'}
+          </div>
+        </div>
+      )
+    }
+    if (outputType === 'reconciliation') {
+      const hasSteps = (c: { investigation_steps?: unknown[] | null }) =>
+        !!c.investigation_steps && c.investigation_steps.length > 0
+      const conflict =
+        (conflicts.data?.price_conflicts ?? []).find(hasSteps) ??
+        conflicts.data?.price_conflicts?.[0]
+      if (!conflict) return <div style={panelStyle}>Loading…</div>
+      return (
+        <div style={panelStyle}>
+          <div className="eyebrow" style={{ fontSize: '10px', marginBottom: '6px' }}>
+            <span className="live-dot" /> Resolved conflict
+          </div>
+          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: '13px', color: '#1b1e2d', marginBottom: '2px' }}>
+            {conflict.commodity_name} · {conflict.mandi_name}
+          </div>
+          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: '20px', color: '#1b1e2d', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
+            <span style={{ color: '#446b26' }}>{formatPrice(conflict.reconciled_price, region)}</span>
+          </div>
+          <div style={{ fontSize: '11px', color: '#8d909e', marginTop: '6px' }}>
+            Δ {conflict.delta_pct.toFixed(1)}% · {conflict.resolution.replace(/_/g, ' ')}
+          </div>
+        </div>
+      )
+    }
+    if (outputType === 'forecast') {
+      const preferredCommodity = region === 'india' ? 'tomato' : ''
+      const f =
+        (preferredCommodity
+          ? (forecasts.data?.price_forecasts ?? []).find((x) =>
+              x.commodity_name.toLowerCase().includes(preferredCommodity),
+            )
+          : undefined) ?? forecasts.data?.price_forecasts?.[0]
+      if (!f) return <div style={panelStyle}>Loading…</div>
+      const curPrice = f.current_price_rs ?? 0
+      const p7 = f.price_7d ?? 0
+      const pctChange = curPrice > 0 ? ((p7 - curPrice) / curPrice) * 100 : 0
+      return (
+        <div style={panelStyle}>
+          <div className="eyebrow" style={{ fontSize: '10px', marginBottom: '6px' }}>
+            <span className="live-dot" /> 7-day forecast
+          </div>
+          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: '13px', color: '#1b1e2d', marginBottom: '2px' }}>
+            {f.commodity_name} · {f.mandi_name}
+          </div>
+          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: '22px', color: '#1b1e2d', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+            {formatPrice(p7, region)}
+          </div>
+          <div style={{ fontSize: '11px', color: pctChange >= 0 ? '#446b26' : '#c71f48', marginTop: '6px', fontVariantNumeric: 'tabular-nums' }}>
+            {pctChange >= 0 ? '+' : ''}{pctChange.toFixed(1)}% in 7d
+          </div>
+        </div>
+      )
+    }
+    if (outputType === 'recommendation') {
+      const rec =
+        (recommendations.data?.sell_recommendations ?? []).find((r) => r.recommendation_text) ??
+        recommendations.data?.sell_recommendations?.[0]
+      if (!rec) return <div style={panelStyle}>Loading…</div>
+      const langCode = rec.local_language_code || ''
+      const langName = LANGUAGE_NAMES[langCode] ?? ''
+      const preview = (rec.recommendation_text || '').slice(0, 100) + ((rec.recommendation_text?.length ?? 0) > 100 ? '…' : '')
+      return (
+        <div style={panelStyle}>
+          <div className="eyebrow" style={{ fontSize: '10px', marginBottom: '6px' }}>
+            <span className="live-dot" /> Latest advice
+          </div>
+          <p style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: '12px', lineHeight: 1.5, color: '#1b1e2d', margin: 0 }}>
+            {preview}
+          </p>
+          <div style={{ fontSize: '11px', color: '#8d909e', marginTop: '6px' }}>
+            {rec.farmer_name}{langName ? ` · ${langName}` : ''}
+          </div>
+        </div>
+      )
+    }
+    if (outputType === 'delivery') {
+      const d =
+        (deliveries.data?.delivery_logs ?? []).find((x) => x.status === 'sent') ??
+        deliveries.data?.delivery_logs?.[0]
+      const totalSent = (deliveries.data?.delivery_logs ?? []).filter((x) => x.status === 'sent').length
+      const tzLabel = region === 'kenya' ? 'EAT' : 'IST'
+      const ts = d?.created_at ?? ''
+      return (
+        <div style={panelStyle}>
+          <div className="eyebrow" style={{ fontSize: '10px', marginBottom: '6px' }}>
+            <span className="live-dot" /> Messages delivered
+          </div>
+          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: '24px', color: '#1b1e2d', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+            {totalSent}
+          </div>
+          <div style={{ fontSize: '11px', color: '#8d909e', marginTop: '6px' }}>
+            latest · {d?.farmer_name ?? '—'} · {(ts.slice(11, 16) || '14:23')} {tzLabel}
+          </div>
+        </div>
+      )
+    }
+    return null
   }
 
   if (outputType === 'readings') {
@@ -511,7 +631,23 @@ function PipelineHero() {
       <div style={{ height: '24px' }} />
 
       {/* Mobile: 2-col — pipeline timeline on left, description + output on right */}
-      <div className="md:hidden grid grid-cols-[1fr_1fr] gap-4 items-start">
+      <style>{`
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.35; transform: scale(0.85); }
+        }
+        .live-dot {
+          display: inline-block;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #446b26;
+          margin-right: 6px;
+          vertical-align: 1px;
+          animation: pulse-dot 1.8s ease-in-out infinite;
+        }
+      `}</style>
+      <div className="md:hidden grid grid-cols-[5fr_7fr] gap-4 items-start">
         <div className="relative flex flex-col gap-4">
           <div
             className="absolute z-0"
@@ -597,7 +733,7 @@ function PipelineHero() {
         </div>
         <div key={step.num} className="animate-fade-in flex flex-col gap-3">
           <div>
-            <div className="eyebrow" style={{ fontSize: '10px', marginBottom: '4px' }}>
+            <div className="eyebrow" style={{ fontSize: '10px', marginBottom: '4px', color: '#446b26' }}>
               Step {String(step.num).padStart(2, '0')} · {step.name}
             </div>
             <p
@@ -617,11 +753,11 @@ function PipelineHero() {
               border: '1px solid #e8e5e1',
               borderLeft: '2px solid #446b26',
               borderRadius: '4px',
-              padding: '12px 14px',
+              padding: '14px 16px',
               overflow: 'hidden',
             }}
           >
-            <StepOutput outputType={step.outputType} />
+            <StepOutput outputType={step.outputType} compact />
           </div>
         </div>
       </div>
