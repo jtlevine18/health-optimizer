@@ -99,7 +99,7 @@ function buildStack(region: 'india' | 'kenya') {
     {
       label: 'Models',
       items: [
-        "Chronos-2 — Amazon's open time-series foundation model for forecasting",
+        "Chronos-Bolt-Tiny + XGBoost MOS — foundation model forecast with per-market bias correction",
         'Claude Sonnet — reasoning agent that investigates price conflicts',
         `Claude Haiku — writes sell advice in English and ${localLanguage}`,
       ],

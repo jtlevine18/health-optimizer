@@ -35,9 +35,7 @@ export default function Sidebar({ open, onClose }: Props) {
   const regionCopy = useRegionCopy()
   const NAV_ITEMS = buildNavItems(region)
   const dataMode = runsData?.runs?.[0]?.steps?.find((s) => s.step === 'ingest')?.details?.data_source_mode
-  // Label the live data source by region so the footer chip is honest.
-  const liveLabel =
-    region === 'kenya' ? `Live · ${regionCopy.primaryDataSource} daily` : 'Live · Agmarknet data.gov.in'
+  const liveLabel = `Live · ${regionCopy.primaryDataSource}`
 
   return (
     <>
