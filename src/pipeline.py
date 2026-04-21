@@ -1083,6 +1083,10 @@ class MarketIntelligencePipeline:
                     "price_30d": fc.price_30d,
                     "ci_lower_7d": fc.ci_lower_7d,
                     "ci_upper_7d": fc.ci_upper_7d,
+                    "ci_lower_14d": fc.ci_lower_14d,
+                    "ci_upper_14d": fc.ci_upper_14d,
+                    "ci_lower_30d": fc.ci_lower_30d,
+                    "ci_upper_30d": fc.ci_upper_30d,
                     "direction": fc.direction,
                     "confidence": fc.confidence,
                 })

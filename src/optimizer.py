@@ -201,7 +201,24 @@ def optimize_sell(
     all_options.sort(key=lambda o: o.net_price_rs, reverse=True)
 
     if not all_options:
-        # No mandis found -- return empty recommendation
+        # Distinguish between the three distinct empty-result cases so the
+        # farmer-facing message is honest:
+        #   1. Commodity not traded at any tracked market (config gap)
+        #   2. Commodity traded somewhere, but no recent price data (ingest
+        #      gap — e.g. KAMIS had no bean prices today)
+        #   3. Data exists but everything is beyond max_distance_km
+        mandis_trading = [m for m in MANDIS if commodity_id in m.commodities_traded]
+        mandis_with_prices = [
+            m for m in mandis_trading
+            if reconciled_prices.get(m.mandi_id, {}).get(commodity_id, {}).get("price_rs", 0) > 0
+        ]
+        if not mandis_trading:
+            fallback_label = f"{commodity_name} not traded at tracked markets"
+        elif not mandis_with_prices:
+            fallback_label = f"No recent price data for {commodity_name}"
+        else:
+            fallback_label = "No markets in range"
+
         return SellRecommendation(
             commodity_id=commodity_id,
             commodity_name=commodity_name,
@@ -209,7 +226,7 @@ def optimize_sell(
             farmer_lat=farmer_lat,
             farmer_lon=farmer_lon,
             best_option=SellOption(
-                mandi_id="", mandi_name="No mandis in range",
+                mandi_id="", mandi_name=fallback_label,
                 commodity_id=commodity_id, sell_timing="now",
                 market_price_rs=0, transport_cost_rs=0, storage_loss_rs=0,
                 storage_cost_rs=0, mandi_fee_rs=0, net_price_rs=0,

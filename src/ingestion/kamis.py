@@ -44,6 +44,12 @@ log = logging.getLogger(__name__)
 
 # --- KAMIS portal configuration -----------------------------------------
 
+# KAMIS publishes prices in KES per kilogram. The rest of the MI pipeline
+# (storage costs, transport costs, mandi fees, forecast training data) uses
+# KES per quintal (100 kg) — matching the Indian Agmarknet convention. All
+# PriceRecord emits in this module apply this conversion.
+KG_TO_QUINTAL = 100
+
 PORTAL_BASE_URL = "https://kamis.kilimo.go.ke/site/market_search"
 
 KAMIS_ATTRIBUTION = (
@@ -463,13 +469,16 @@ def _load_demo_snapshot(
             min_price = _safe_float(row.get("Min Price")) or modal
             max_price = _safe_float(row.get("Max Price")) or modal
             arrivals = _safe_float(row.get("Arrivals (Tonnes)")) or 0.0
+            # KAMIS publishes KES per kg; the rest of the pipeline expects
+            # per-quintal (100 kg) — matching Agmarknet's convention and the
+            # transport/storage/fee constants in optimizer.py. Normalize here.
             results[_market_id(market_obj)].append(PriceRecord(
                 mandi_id=_market_id(market_obj),
                 commodity_id=commodity["id"],
                 date=price_date.strftime("%Y-%m-%d"),
-                min_price_rs=min_price,
-                max_price_rs=max_price,
-                modal_price_rs=modal,
+                min_price_rs=min_price * KG_TO_QUINTAL,
+                max_price_rs=max_price * KG_TO_QUINTAL,
+                modal_price_rs=modal * KG_TO_QUINTAL,
                 arrivals_tonnes=arrivals,
                 source="kamis",
                 freshness_hours=24.0,
@@ -549,8 +558,11 @@ def _to_price_record(
     and retail as `max_price_rs`. `arrivals_tonnes` stays 0 because
     KAMIS's "volume" field is an unconfirmed unit.
     """
-    wholesale = float(raw["wholesale"])
-    retail = float(raw["retail"])
+    # KAMIS publishes KES per kg; the rest of the pipeline expects
+    # per-quintal (100 kg) — matching Agmarknet's convention and the
+    # transport/storage/fee constants in optimizer.py. Normalize here.
+    wholesale = float(raw["wholesale"]) * KG_TO_QUINTAL
+    retail = float(raw["retail"]) * KG_TO_QUINTAL
     return PriceRecord(
         mandi_id=_market_id(market),
         commodity_id=commodity["id"],
