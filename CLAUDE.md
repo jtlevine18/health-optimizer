@@ -25,15 +25,12 @@ Each step has Claude agent + rule-based fallback. Pipeline runs end-to-end witho
 1. **INGEST** — Agmarknet API (data.gov.in), eNAM scraper (simulated), NASA POWER weather (~68s with real API)
 2. **EXTRACT** — Normalize commodity names, detect stale data, flag anomalies (5 Claude tools)
 3. **RECONCILE** — Resolve Agmarknet vs eNAM price conflicts (5 Claude investigation tools: compare_sources, check_neighbors, seasonal_norms, verify_arrivals, transport_arbitrage)
-4. **FORECAST** — Chronos-Bolt-Tiny foundation model + XGBoost MOS bias correction, 7/14/30d horizons with probabilistic CI. Fallback chain: Chronos + MOS → XGBoost standalone → seasonal baseline. First run after cold start ~5-8 min (model loading + training). Subsequent runs ~30-60s.
+4. **FORECAST** — Chronos-2 foundation model (zero-shot) for 7/14/30d horizons with probabilistic CIs straight from the quantile outputs. Fallback chain: Chronos-2 → XGBoost standalone → seasonal baseline. First run after cold start ~5-8 min (model loading + training of XGBoost fallback on synthetic data). Subsequent runs ~30-60s.
 5. **OPTIMIZE** — Sell optimizer (net price after transport + storage loss + mandi fees) + credit readiness assessment
 6. **RECOMMEND** — Claude-generated sell advice in English + Tamil via RAG (~120s, ~$0.12)
 
 ### Pipeline tracker
 HF Space root page (`/`) shows live pipeline progress with step-by-step status, run button, and auto-polling. Uses `/api/pipeline/status` endpoint.
-
-### Monthly MOS retrain
-`scripts/retrain_mos.py` pulls prediction-vs-actual pairs from Neon, computes residuals, and retrains XGBoost MOS correction models. Triggered on the 4th Monday of each month via GitHub Action, or manually via `POST /api/pipeline/retrain-mos`. Model improves over time as real Agmarknet data accumulates.
 
 ## Key files
 
@@ -52,7 +49,7 @@ src/ingestion/enam_scraper.py      — Simulated eNAM prices with realistic 3-12
 src/ingestion/nasa_power.py        — NASA POWER async client
 src/extraction/agent.py            — Claude + RuleBasedExtractor (normalize, stale detection, anomalies)
 src/reconciliation/agent.py        — Claude + RuleBasedReconciler (5 investigation tools)
-src/forecasting/price_model.py     — ChronosXGBoostForecaster (Chronos + MOS) + XGBoostPriceModel (15 features, fallback)
+src/forecasting/price_model.py     — ChronosXGBoostForecaster (Chronos-2 primary) + XGBoostPriceModel (15 features, fallback)
 src/forecasting/chronos_model.py   — Amazon Chronos-Bolt-Tiny wrapper with 60s load timeout
 src/optimizer.py                   — SellOption/SellRecommendation + CreditReadiness assessment
 src/recommendation_agent.py        — Claude broker agent (5 tools, English + Tamil)
@@ -60,7 +57,6 @@ src/rag/knowledge_base.py          — 27 chunks: TN crop calendars, MSP, storag
 src/rag/provider.py                — Hybrid FAISS + BM25 retrieval
 src/store.py                       — Thread-safe PipelineStore singleton (in-memory, volatile)
 src/db.py                          — Neon PostgreSQL ORM with JSONB full_data columns
-scripts/retrain_mos.py             — Monthly MOS retrain from accumulated Neon data
 ```
 
 ### Vercel Serverless API (frontend/api/)
@@ -197,7 +193,7 @@ This pipeline is designed to be forked. See [REBUILD.md](REBUILD.md) for the ful
 **HF Space** (pipeline runner, paused between runs):
 - `Dockerfile` builds Python 3.11-slim + PyTorch CPU + Chronos-Bolt-Tiny pre-cached
 - CPU Upgrade hardware ($0.03/hr, paused when idle)
-- Weekly GitHub Action: wake → pipeline → optional MOS retrain → pause
+- Weekly GitHub Action: wake → pipeline → pause
 - Pipeline tracker at Space root page with run button
 
 **Vercel** (frontend + API, always on):
@@ -209,6 +205,6 @@ This pipeline is designed to be forked. See [REBUILD.md](REBUILD.md) for the ful
 **Neon** (PostgreSQL, always on):
 - `ep-dry-hat-akgt60az` in `us-west-2`
 - Full pipeline data in JSONB columns for rich frontend rendering
-- Accumulates prediction-vs-actual pairs for monthly MOS retrain
+- Accumulates prediction-vs-actual pairs for offline model evaluation (no MOS retrain wired to production)
 
 **Do NOT push to HF Spaces without confirming with Jeff first.**
