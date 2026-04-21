@@ -99,7 +99,7 @@ function buildStack(region: 'india' | 'kenya') {
     {
       label: 'Models',
       items: [
-        "Chronos-Bolt-Tiny + XGBoost MOS — foundation model forecast with per-market bias correction",
+        "Chronos-2 — foundation model producing probabilistic price forecasts from market history",
         'Claude Sonnet — reasoning agent that investigates price conflicts',
         `Claude Haiku — writes sell advice in English and ${localLanguage}`,
       ],

@@ -3,12 +3,7 @@ name: Weekly Pipeline Run
 on:
   schedule:
     - cron: '0 1 * * 1'  # Monday 01:00 UTC = 06:30 IST
-  workflow_dispatch:
-    inputs:
-      retrain:
-        description: 'Force MOS retrain after pipeline run'
-        type: boolean
-        default: false
+  workflow_dispatch: {}
 
 jobs:
   trigger-pipeline:
@@ -54,26 +49,6 @@ jobs:
           done
           echo "Timed out waiting for pipeline"
           exit 1
-
-      - name: Monthly MOS retrain
-        if: success()
-        run: |
-          # Retrain on 4th Monday of each month, or if manually requested
-          DAY=$(date +%d)
-          FORCE_RETRAIN="${{ github.event.inputs.retrain }}"
-
-          if [ "$DAY" -ge 22 ] || [ "$FORCE_RETRAIN" = "true" ]; then
-            echo "Triggering MOS retrain..."
-            RESULT=$(curl -s -X POST \
-              "https://jtlevine-market-intelligence.hf.space/api/pipeline/retrain-mos" \
-              -H "Content-Type: application/json")
-            echo "Retrain response: $RESULT"
-            echo "Waiting 60s for retrain to complete..."
-            sleep 60
-            echo "MOS retrain done (check Space logs for details)"
-          else
-            echo "Not 4th week (day=$DAY) — skipping retrain"
-          fi
 
       - name: Pause HF Space
         if: always()

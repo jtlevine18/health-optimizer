@@ -38,7 +38,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
 
   res.json({
     model_metrics: {
-      model_type: 'chronos_xgboost_mos',
+      model_type: 'chronos2',
       ...metrics,
       features: [
         'current_reconciled_price',
