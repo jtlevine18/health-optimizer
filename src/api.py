@@ -26,6 +26,7 @@ Endpoints:
 import logging
 import random
 import threading
+from contextlib import asynccontextmanager
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
@@ -55,10 +56,50 @@ from src.scheduler import scheduler
 
 logger = logging.getLogger(__name__)
 
+
+def _prewarm_chronos() -> None:
+    """Warm the Chronos model cache at Space startup.
+
+    HF Spaces rebuilds wipe /home/appuser/.cache/huggingface, so the
+    Dockerfile's pre-bake doesn't survive and the first pipeline trigger
+    after a rebuild otherwise falls through to XGBoost while the model
+    downloads. Firing the load here — in a daemon thread at FastAPI
+    startup — lets the download finish in parallel with FastAPI becoming
+    ready to serve. By the time the first trigger arrives (typically
+    60-90s after Space wake via the GH Action), Chronos is already
+    cached on disk.
+    """
+    try:
+        from src.forecasting.chronos_model import ChronosForecaster
+
+        forecaster = ChronosForecaster()
+        # Generous timeout — nobody is waiting on this thread. We care that
+        # the download succeeds, not that it finishes fast.
+        loaded = forecaster.load(timeout_s=300)
+        if loaded:
+            logger.info("[PREWARM] Chronos loaded at startup (%.1fs)", forecaster._load_time_s)
+        else:
+            logger.warning(
+                "[PREWARM] Chronos load returned False — first pipeline run may fall back to XGBoost"
+            )
+    except Exception as exc:
+        logger.warning("[PREWARM] Chronos prewarm threw: %s", exc)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    prewarm_thread = threading.Thread(target=_prewarm_chronos, daemon=True, name="chronos-prewarm")
+    prewarm_thread.start()
+    logger.info("[STARTUP] Chronos prewarm thread started")
+    yield
+    # No shutdown cleanup — daemon thread dies with the process.
+
+
 app = FastAPI(
     title="Market Intelligence Agent",
     description="AI-powered market timing and routing for Tamil Nadu smallholder farmers",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
