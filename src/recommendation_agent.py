@@ -38,7 +38,6 @@ REGION_CONFIG: dict[str, dict[str, str]] = {
         "market_type": "mandi",
         "local_language_name": "Tamil",
         "local_language_code": "ta",
-        "local_greeting_example": "வணக்கம் Lakshmi...",
         "typical_crops": "paddy, cotton, turmeric, groundnut",
         "phone_country_code": "+91",
     },
@@ -50,7 +49,6 @@ REGION_CONFIG: dict[str, dict[str, str]] = {
         "market_type": "market",
         "local_language_name": "Swahili",
         "local_language_code": "sw",
-        "local_greeting_example": "Habari Wanjiku...",
         "typical_crops": "dry maize, beans, Irish potatoes, green grams",
         "phone_country_code": "+254",
     },
@@ -181,7 +179,9 @@ _TRANSLATION_PROMPT_TEMPLATE = (
     "Translate the following agricultural sell recommendation into {local_language_name}. "
     "Keep all numbers, {market_type} names, and {currency_symbol} amounts as-is. "
     "Use simple, conversational {local_language_name} that a rural farmer would "
-    "understand (e.g. start naturally, like \"{local_greeting_example}\"). "
+    "understand. If the English text opens with a greeting and a farmer's name, "
+    "translate the greeting naturally but keep the farmer's name exactly as "
+    "written in the English source — do NOT substitute any other name. "
     "Do not add any preamble -- just output the {local_language_name} text.\n\n"
 )
 
