@@ -92,11 +92,16 @@ class ChronosForecaster:
         self._load_time_s: float = 0.0
         self._model_variant: str = ""  # "bolt" or "t5"
 
-    def load(self, timeout_s: float = 60) -> bool:
+    def load(self, timeout_s: float = 180) -> bool:
         """Load the Chronos pipeline. Tries Bolt V2, falls back to T5-small V1.
 
         Args:
-            timeout_s: Max seconds to wait for model download/load (default 60s).
+            timeout_s: Max seconds to wait for model download/load (default 180s).
+                       The Dockerfile pre-bakes amazon/chronos-bolt-tiny at build
+                       time, but the cache doesn't survive HF Spaces rebuilds, so
+                       the first trigger after a rebuild re-downloads. 180s fits
+                       the observed cold-start time (~80-90s) with headroom;
+                       subsequent loads hit disk cache in <1s.
                        If exceeded, returns False so the pipeline falls back to XGBoost.
         """
         if not CHRONOS_AVAILABLE:
