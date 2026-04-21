@@ -602,9 +602,12 @@ class ChronosXGBoostForecaster:
         self.metrics = dict(self._xgb_model.metrics)
         self.feature_importances = dict(self._xgb_model.feature_importances)
 
-        # Step 2: Load Chronos-2 (zero-shot, no training needed)
+        # Step 2: Load Chronos-2 (zero-shot, no training needed). When Chronos
+        # is available, it becomes the primary forecast path; XGBoost
+        # standalone stays in place as the row-level fallback.
         chronos_ok = self._init_chronos()
         if chronos_ok:
+            self.model_used = "chronos2"
             log.info("Chronos-2 loaded; primary forecast path ready")
         else:
             log.info("Forecast path: %s (Chronos-2 not available)", self.model_used)
