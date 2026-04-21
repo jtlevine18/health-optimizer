@@ -40,8 +40,11 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 def fetch_actuals_vs_predictions(engine, min_rows: int = 50) -> pd.DataFrame | None:
     """Pull prediction-vs-actual pairs from Neon.
 
-    Joins price_forecasts (what we predicted) with market_prices
-    (what actually happened) on (mandi_id, commodity_id, date).
+    Joins price_forecasts (what we predicted at forecast_date for a given
+    horizon) with market_prices (what actually happened on the target date =
+    forecast_date + horizon_days). The date-aligned join is essential — a
+    7-day forecast issued on March 15 must be paired with the actual on
+    March 22, not with every actual price ever seen for that mandi.
     """
     query = text("""
         SELECT
@@ -56,6 +59,7 @@ def fetch_actuals_vs_predictions(engine, min_rows: int = 50) -> pd.DataFrame | N
         JOIN market_prices m
             ON f.mandi_id = m.mandi_id
             AND f.commodity_id = m.commodity_id
+            AND m.date::date = f.forecast_date::date + f.horizon_days
         WHERE m.price_rs IS NOT NULL
             AND f.predicted_price IS NOT NULL
         ORDER BY f.forecast_date, f.mandi_id, f.commodity_id
@@ -103,12 +107,16 @@ def build_training_features(
     """
     rows = []
 
-    # Group history by (mandi, commodity) for efficient lookup
-    history_groups = {}
+    # Group history by (mandi, commodity) as date-ordered DataFrames so we
+    # can slice to "prices strictly at or before forecast_date" — never
+    # letting the target actual leak into the feature vector.
+    history_groups: dict[tuple[str, str], pd.DataFrame] = {}
     for (mid, cid), group in history_df.groupby(["mandi_id", "commodity_id"]):
-        prices = group.sort_values("date")["price_rs"].values
-        history_groups[(mid, cid)] = prices
+        history_groups[(mid, cid)] = (
+            group[["date", "price_rs"]].sort_values("date").reset_index(drop=True)
+        )
 
+    skipped_no_history = 0
     for _, pair in pairs_df.iterrows():
         mid = pair["mandi_id"]
         cid = pair["commodity_id"]
@@ -121,26 +129,48 @@ def build_training_features(
         if not mandi:
             continue
 
+        # Normalize forecast_date to a YYYY-MM-DD string for point-in-time
+        # slicing of history (which is keyed by VARCHAR(10) dates).
+        try:
+            forecast_date = (
+                pd.to_datetime(pair["forecast_date"]).date()
+                if isinstance(pair["forecast_date"], str)
+                else pair["forecast_date"]
+            )
+            month = forecast_date.month
+        except Exception:
+            forecast_date = date.today()
+            month = forecast_date.month
+        forecast_date_str = forecast_date.strftime("%Y-%m-%d")
+
+        # Slice price history to rows strictly before forecast_date. This is
+        # the crux of the leakage fix: `current_reconciled_price` must reflect
+        # what was known at forecast time, not the target actual.
+        hist = history_groups.get((mid, cid))
+        if hist is None or hist.empty:
+            skipped_no_history += 1
+            continue
+        prior = hist[hist["date"] < forecast_date_str]
+        if len(prior) == 0:
+            skipped_no_history += 1
+            continue
+
+        # Current reconciled price: most recent price strictly before
+        # forecast_date. Matches what the live pipeline sees at inference.
+        current_price = float(prior["price_rs"].iloc[-1])
+        prior_prices = prior["price_rs"].values
+
         # Residual is what MOS learns to correct
         residual = actual - predicted
 
-        # Get price history for this pair
-        history = history_groups.get((mid, cid), np.array([]))
-
-        # Current price (approximate: use the actual as proxy for now)
-        current_price = actual
-
-        # Compute features
-        n = len(history)
-        trend_7 = _linear_slope(history[-7:]) if n >= 7 else 0
-        vol_30 = float(np.std(history[-30:]) / np.mean(history[-30:])) if n >= 30 and np.mean(history[-30:]) > 0 else 0.05
-
-        # Parse date for seasonal features
-        try:
-            forecast_date = pd.to_datetime(pair["forecast_date"]).date() if isinstance(pair["forecast_date"], str) else pair["forecast_date"]
-            month = forecast_date.month
-        except Exception:
-            month = date.today().month
+        # Feature windows anchored to prior (not full) history
+        n = len(prior_prices)
+        trend_7 = _linear_slope(prior_prices[-7:]) if n >= 7 else 0.0
+        vol_30 = (
+            float(np.std(prior_prices[-30:]) / np.mean(prior_prices[-30:]))
+            if n >= 30 and np.mean(prior_prices[-30:]) > 0
+            else 0.05
+        )
 
         seasonal = SEASONAL_INDICES.get(cid, {}).get(month, 1.0)
 
@@ -151,6 +181,7 @@ def build_training_features(
         rows.append({
             "mandi_id": mid,
             "commodity_id": cid,
+            "forecast_date": forecast_date_str,
             "horizon_days": horizon,
             "current_reconciled_price": round(current_price, 0),
             "price_trend_7d": round(trend_7, 4),
@@ -164,6 +195,12 @@ def build_training_features(
             "predicted": predicted,
             "actual": actual,
         })
+
+    if skipped_no_history:
+        log.info(
+            "Skipped %d pairs with no prior price history (can't build current_price feature without leakage)",
+            skipped_no_history,
+        )
 
     df = pd.DataFrame(rows)
     log.info(
@@ -191,22 +228,49 @@ def retrain_mos(training_df: pd.DataFrame) -> dict:
 
     metrics = {}
 
+    # Minimum RMSE improvement over raw-pipeline baseline required to
+    # overwrite the production model. A retrain that fails the gate is
+    # logged but does NOT replace the saved model.
+    PROMOTION_THRESHOLD_PCT = 5.0
+
     for horizon in [7, 14, 30]:
         horizon_df = training_df[training_df["horizon_days"] == horizon].copy()
         if len(horizon_df) < 20:
             log.warning("Only %d rows for %dd horizon — skipping", len(horizon_df), horizon)
+            metrics[f"{horizon}d"] = {
+                "samples": len(horizon_df),
+                "skipped": "insufficient_samples",
+                "promoted": False,
+            }
             continue
+
+        # Temporal sort for a time-ordered train/test split. Random splits
+        # leak future into past for time-series data.
+        if "forecast_date" in horizon_df.columns:
+            horizon_df = horizon_df.sort_values("forecast_date").reset_index(drop=True)
 
         X = horizon_df[feature_cols].fillna(0)
         y_residual = horizon_df["residual"]
 
-        # RMSE before MOS (raw Chronos/XGBoost error)
-        rmse_before = float(np.sqrt(np.mean(y_residual ** 2)))
-
-        # Train/test split (80/20)
+        # Train/test split (80/20 temporal)
         split = int(len(X) * 0.8)
         X_train, X_test = X.iloc[:split], X.iloc[split:]
         y_train, y_test = y_residual.iloc[:split], y_residual.iloc[split:]
+
+        if len(X_test) == 0:
+            log.warning("No test samples after 80/20 split for %dd — skipping", horizon)
+            metrics[f"{horizon}d"] = {
+                "samples": len(horizon_df),
+                "skipped": "empty_test_split",
+                "promoted": False,
+            }
+            continue
+
+        # Baseline RMSE on the SAME held-out test set the retrained model
+        # will be scored on. Apples-to-apples comparison — the prior version
+        # compared test-set rmse_after to full-dataset rmse_before, which
+        # inflated apparent improvement.
+        rmse_before = float(np.sqrt(np.mean(y_test ** 2)))
 
         model = xgb.XGBRegressor(
             objective="reg:squarederror",
@@ -219,27 +283,44 @@ def retrain_mos(training_df: pd.DataFrame) -> dict:
         )
         model.fit(X_train, y_train)
 
-        # RMSE after MOS correction
+        # RMSE after MOS correction on the held-out test set
         preds = model.predict(X_test)
         corrected_residuals = y_test - preds
         rmse_after = float(np.sqrt(np.mean(corrected_residuals ** 2)))
 
         improvement = (1 - rmse_after / rmse_before) * 100 if rmse_before > 0 else 0
 
+        # Promotion gate: require material improvement on held-out data. A
+        # bad retrain that would replace a working model with a worse one
+        # is logged and discarded.
+        model_path = f"models/mos_{horizon}d.json"
+        promoted = improvement >= PROMOTION_THRESHOLD_PCT
+
+        if promoted:
+            os.makedirs(os.path.dirname(model_path), exist_ok=True)
+            model.save_model(model_path)
+            log.info(
+                "MOS %dd PROMOTED: %d train + %d test, RMSE %.1f → %.1f (%.1f%% improvement >= %.1f%% threshold)",
+                horizon, len(X_train), len(X_test), rmse_before, rmse_after,
+                improvement, PROMOTION_THRESHOLD_PCT,
+            )
+        else:
+            log.warning(
+                "MOS %dd REJECTED: %d train + %d test, RMSE %.1f → %.1f (%.1f%% improvement < %.1f%% threshold). "
+                "Existing %s left in place.",
+                horizon, len(X_train), len(X_test), rmse_before, rmse_after,
+                improvement, PROMOTION_THRESHOLD_PCT, model_path,
+            )
+
         metrics[f"{horizon}d"] = {
             "samples": len(horizon_df),
+            "train_samples": len(X_train),
+            "test_samples": len(X_test),
             "rmse_before": round(rmse_before, 1),
             "rmse_after": round(rmse_after, 1),
             "improvement_pct": round(improvement, 1),
+            "promoted": promoted,
         }
-
-        # Save model
-        model_path = f"models/mos_{horizon}d.json"
-        model.save_model(model_path)
-        log.info(
-            "MOS %dd retrained: %d samples, RMSE %.1f → %.1f (%.1f%% improvement)",
-            horizon, len(horizon_df), rmse_before, rmse_after, improvement,
-        )
 
     return metrics
 
@@ -313,11 +394,23 @@ def main():
 
     # Summary
     print("\n=== MOS Retrain Results ===")
+    any_promoted = False
     for horizon, m in sorted(metrics.items()):
-        print(f"  {horizon}: {m['samples']} samples, RMSE {m['rmse_before']} → {m['rmse_after']} ({m['improvement_pct']}% improvement)")
+        if m.get("skipped"):
+            print(f"  {horizon}: skipped ({m['skipped']}, samples={m.get('samples', 0)})")
+            continue
+        tag = "PROMOTED" if m.get("promoted") else "REJECTED"
+        any_promoted = any_promoted or m.get("promoted", False)
+        print(
+            f"  {horizon}: {tag} | {m['samples']} samples "
+            f"(train={m.get('train_samples', '?')}, test={m.get('test_samples', '?')}) | "
+            f"RMSE {m['rmse_before']} → {m['rmse_after']} ({m['improvement_pct']}% improvement)"
+        )
 
     if not metrics:
         print("  No horizons had enough data to retrain.")
+    elif not any_promoted:
+        print("  No new models promoted — production models unchanged.")
 
 
 if __name__ == "__main__":
