@@ -630,6 +630,11 @@ class MarketIntelligencePipeline:
                     logger.warning("Model training failed: %s -- using seasonal baseline", exc)
 
             self._forecasts = model.predict(features_df, price_histories=price_histories)
+            # Recapture model_type after predict() — model.model_used is the
+            # truth of which forecast path actually ran, which can differ from
+            # the post-load/train intent (e.g., Chronos loaded but predict
+            # fell through to XGBoost for rows without enough history).
+            model_type = model.model_used
             self._model_metrics = {
                 "model_type": model_type,
                 **model.metrics,
