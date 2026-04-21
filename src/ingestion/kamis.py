@@ -497,10 +497,19 @@ def _load_demo_snapshot(
 def _resolve_product_id(commodity: dict) -> int | None:
     """Map a commodity dict to a KAMIS product_id.
 
-    Tries `commodity["kamis_name"]`, `commodity["name"]`,
-    `commodity["id"]`, then the alias table. Returns None if nothing
-    matches — the caller logs and skips.
+    Preferred path: the commodity config carries `kamis_product_id`
+    directly — trust it. That's the source of truth in
+    commodities_kenya.json and avoids string-matching fragility.
+
+    Legacy fallback: try `kamis_name`, `name`, `id`, then the alias
+    table. Kept for commodities whose configs predate the explicit
+    `kamis_product_id` field. Returns None if nothing matches — caller
+    logs and skips.
     """
+    direct = commodity.get("kamis_product_id")
+    if isinstance(direct, int) and direct > 0:
+        return direct
+
     for key in ("kamis_name", "name", "id"):
         raw = commodity.get(key)
         if not raw:
