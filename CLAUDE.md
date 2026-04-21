@@ -19,15 +19,15 @@ Vercel (always on) → serverless API reads from → Neon → serves frontend
 
 **6-step pipeline:** `INGEST → EXTRACT → RECONCILE → FORECAST → OPTIMIZE → RECOMMEND`
 
-Each step has Claude agent + rule-based fallback. Pipeline runs end-to-end without Claude (set `ANTHROPIC_API_KEY` to enable). Real Agmarknet data from data.gov.in is the default; set `MARKET_INTEL_DEMO_MODE=1` to fall back to deterministic seed=42 demo prices. Real NASA POWER weather for all 15 markets.
+Each step has Claude agent + rule-based fallback. Pipeline runs end-to-end without Claude (set `ANTHROPIC_API_KEY` to enable). Real public market data is the default per active region (KAMIS for Kenya, Agmarknet for Tamil Nadu); set `MARKET_INTEL_DEMO_MODE=1` to fall back to deterministic seed=42 demo prices. Real NASA POWER weather for every configured market.
 
 ### Pipeline steps
-1. **INGEST** — Agmarknet API (data.gov.in), eNAM scraper (simulated), NASA POWER weather (~68s with real API)
+1. **INGEST** — Region-active price source (KAMIS for Kenya, Agmarknet + eNAM for Tamil Nadu) + NASA POWER weather (~68s with real API)
 2. **EXTRACT** — Normalize commodity names, detect stale data, flag anomalies (5 Claude tools)
-3. **RECONCILE** — Resolve Agmarknet vs eNAM price conflicts (5 Claude investigation tools: compare_sources, check_neighbors, seasonal_norms, verify_arrivals, transport_arbitrage)
-4. **FORECAST** — Chronos-2 foundation model (zero-shot) for 7/14/30d horizons with probabilistic CIs straight from the quantile outputs. Fallback chain: Chronos-2 → XGBoost standalone → seasonal baseline. First run after cold start ~5-8 min (model loading + training of XGBoost fallback on synthetic data). Subsequent runs ~30-60s.
-5. **OPTIMIZE** — Sell optimizer (net price after transport + storage loss + mandi fees) + credit readiness assessment
-6. **RECOMMEND** — Claude-generated sell advice in English + Tamil via RAG (~120s, ~$0.12)
+3. **RECONCILE** — Resolve cross-source price conflicts when a secondary source is configured (5 Claude investigation tools: compare_sources, check_neighbors, seasonal_norms, verify_arrivals, transport_arbitrage). For the Kenya default, KAMIS is the only live source and reconciliation degrades to single-source validation.
+4. **FORECAST** — Chronos-Bolt-Tiny foundation model (zero-shot) for 7/14/30d horizons with probabilistic CIs straight from the quantile outputs. Fallback chain: Chronos-Bolt-Tiny → XGBoost standalone → seasonal baseline. First run after cold start ~5-8 min (model loading + training of XGBoost fallback on synthetic data). Subsequent runs ~30-60s.
+5. **OPTIMIZE** — Sell optimizer (net price after transport + storage loss + market fees) + credit readiness assessment
+6. **RECOMMEND** — Claude-generated sell advice in English + the region's primary local language (Swahili for Kenya, Tamil for Tamil Nadu) via RAG (~120s, ~$0.12)
 
 ### Pipeline tracker
 HF Space root page (`/`) shows live pipeline progress with step-by-step status, run button, and auto-polling. Uses `/api/pipeline/status` endpoint.
@@ -122,9 +122,10 @@ Frontend proxies `/api/*` to localhost:7860 via vite.config.ts. Alternatively se
 
 ## Data sources
 
-- **Agmarknet** (data.gov.in) — Real daily wholesale prices for Tamil Nadu mandis. Commodity names: Paddy, Groundnut, Turmeric(Finger), Cotton, Coconut, Maize, Urad (Black Gram), Moong(Green Gram), Onion, Banana. API returns current-day data only (no historical date filters).
-- **eNAM** — No real scraper available; returns empty in live mode (reconciliation falls back to Agmarknet-only path). Demo mode generates simulated prices with 3-12% divergence from Agmarknet.
-- **NASA POWER** — Real daily weather for all 15 mandi locations (temperature, precipitation, humidity).
+- **KAMIS** (Kenya Agricultural Markets Information System) — Default region source. Real daily wholesale prices for Kenya county markets. Commodity configs carry `kamis_product_id` directly; maize, beans, sorghum, rice, etc.
+- **Agmarknet** (data.gov.in) — Tamil Nadu config source. Real daily wholesale prices for Tamil Nadu mandis. Commodity names: Paddy, Groundnut, Turmeric(Finger), Cotton, Coconut, Maize, Urad (Black Gram), Moong(Green Gram), Onion, Banana. API returns current-day data only (no historical date filters).
+- **eNAM** — Tamil Nadu config only. No real scraper available; returns empty in live mode (reconciliation falls back to Agmarknet-only path). Demo mode generates simulated prices with 3-12% divergence from Agmarknet.
+- **NASA POWER** — Real daily weather for every configured market location (temperature, precipitation, humidity).
 
 ## Neon PostgreSQL
 
@@ -179,7 +180,7 @@ This pipeline is designed to be forked. See [REBUILD.md](REBUILD.md) for the ful
 
 ## Important conventions
 
-- All prices in Indian Rupees (Rs or ₹), per quintal
+- Prices are carried in the active region's currency and unit (KES per 90kg bag for Kenya, Rs/₹ per quintal for Tamil Nadu). The DB column is named `price_rs` for legacy reasons but holds whatever unit the active config emits.
 - User-visible strings prefer "market" to "mandi" (internal code and DB columns keep `mandi_id` since it's the accurate Indian term)
 - Demo data is deterministic (seed=42) and tells a coherent story about March 2026 Tamil Nadu markets
 - CORS is set to `allow_origins=["*"]` for local development

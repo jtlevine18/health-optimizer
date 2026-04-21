@@ -256,4 +256,4 @@ cd frontend && npm run dev
 - **NASA POWER weather** works for any lat/lon on earth — no changes needed.
 - **The reconciliation logic** doesn't care about specific data sources. It just sees "source A says X, source B says Y" and investigates. If you only have one source, reconciliation becomes validation (checking against seasonal norms, neighboring markets).
 - **Credit readiness** is computed from sell optimization results — it's currency and geography neutral. Just make sure `base_price_rs` values are in your local currency.
-- **The Chronos-2 neural forecaster** is a foundation model trained on general time series — it works for any commodity in any region.
+- **The Chronos-Bolt-Tiny neural forecaster** is an Amazon open foundation model trained on general time series — it works for any commodity in any region and runs zero-shot (no regional retraining).

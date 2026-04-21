@@ -47,11 +47,11 @@ const HERO_COPY: Record<string, HeroLocalized> = {
   forecast: {
     india: {
       short: 'Probabilistic forecasts out to thirty days',
-      body: "Chronos-Bolt-Tiny — Amazon's open time-series foundation model — produces probabilistic forecasts for every commodity at every market, out to thirty days. An XGBoost MOS layer then learns each market's historical bias from five years of arrival data and corrects for it, the same way a weather pipeline corrects against station history.",
+      body: "Chronos-Bolt-Tiny — Amazon's open time-series foundation model — produces zero-shot probabilistic price forecasts for every commodity at every market, out to thirty days. The confidence bands come straight from the model's quantile outputs, and an XGBoost standalone model stands by as a fallback when a market-commodity pair has too little history for Chronos to anchor on.",
     },
     kenya: {
       short: 'Probabilistic forecasts out to thirty days',
-      body: "Chronos-Bolt-Tiny — Amazon's open time-series foundation model — produces probabilistic forecasts for every commodity at every market, out to thirty days. An XGBoost MOS layer then learns each market's historical bias from five years of arrival data and corrects for it, the same way a weather pipeline corrects against station history.",
+      body: "Chronos-Bolt-Tiny — Amazon's open time-series foundation model — produces zero-shot probabilistic price forecasts for every commodity at every market, out to thirty days. The confidence bands come straight from the model's quantile outputs, and an XGBoost standalone model stands by as a fallback when a market-commodity pair has too little history for Chronos to anchor on.",
     },
   },
   advise: {

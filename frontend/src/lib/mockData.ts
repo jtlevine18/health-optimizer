@@ -707,7 +707,7 @@ const RECONCILED_DATA: ReconciledDataResponse = {
 
 const MODEL_INFO: ModelInfoResponse = {
   model_metrics: {
-    model_type: 'Chronos-Bolt-Tiny + XGBoost MOS',
+    model_type: 'Chronos-Bolt-Tiny',
     rmse: 142.6,
     mae: 98.2,
     r2: 0.83,
