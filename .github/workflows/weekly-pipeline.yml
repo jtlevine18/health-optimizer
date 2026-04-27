@@ -17,16 +17,48 @@ jobs:
             "https://huggingface.co/api/spaces/jtlevine/market-intelligence/restart" \
             -H "Authorization: Bearer ${{ secrets.HF_TOKEN }}" \
             || true
-          echo "Waiting for Space to boot..."
-          sleep 90
+          echo "Wake POST sent. Health-check loop will wait for the Space to come up."
+
+      - name: Wait for Space to be healthy
+        run: |
+          # Poll up to 10 minutes — replaces the fixed sleep 90 that masked
+          # cold-start delays. Same hardening as the WA fix that recovered
+          # 5 weeks of silent-failure Monday crons.
+          MAX_WAIT=600
+          INTERVAL=20
+          ELAPSED=0
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            if curl -sf "https://jtlevine-market-intelligence.hf.space/health" > /dev/null; then
+              echo "[${ELAPSED}s] Space is healthy"
+              exit 0
+            fi
+            echo "[${ELAPSED}s] not yet ready"
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          echo "Space never came up within ${MAX_WAIT}s"
+          exit 1
 
       - name: Trigger pipeline run
         run: |
           echo "Triggering pipeline..."
-          TRIGGER=$(curl -s -X POST \
-            "https://jtlevine-market-intelligence.hf.space/api/pipeline/trigger" \
+          # Capture HTTP status + validate JSON body. Bail loudly if not 2xx
+          # or non-JSON (the silent-404-HTML failure mode).
+          HTTP_STATUS=$(curl -s -o /tmp/trigger.out -w '%{http_code}' \
+            -X POST "https://jtlevine-market-intelligence.hf.space/api/pipeline/trigger" \
             -H "Content-Type: application/json")
-          echo "Trigger response: $TRIGGER"
+          echo "HTTP $HTTP_STATUS"
+          echo "Body:"
+          cat /tmp/trigger.out
+          echo
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "Trigger returned non-2xx status — aborting."
+            exit 1
+          fi
+          if ! python3 -c "import json,sys; json.load(open('/tmp/trigger.out'))" 2>/dev/null; then
+            echo "Trigger response is not valid JSON (likely an HF 404 HTML page) — aborting."
+            exit 1
+          fi
 
       - name: Wait for pipeline completion
         run: |
